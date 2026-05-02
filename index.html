@@ -707,6 +707,7 @@ function handleP2PMove(data) {
       buildStocks();
       updateStatus(color.toUpperCase() + " wins!");
       gameActive = false;
+      saveGameReplay();
       return;
     }
 
@@ -721,6 +722,69 @@ function copyGameCode() {
   const code = document.getElementById("gameCodeDisplay").value;
   navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
   alert("Game link copied!");
+}
+
+// ── Game Replay ────────────────────────────────────────
+function saveGameReplay() {
+  if (moveLog.length === 0) return;
+  const replay = {
+    moves: moveLog,
+    timestamp: new Date().toLocaleString(),
+    mode: mode,
+    finalWinner: gameActive ? null : current
+  };
+  const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
+  replays.unshift(replay);
+  replays.splice(10); // Keep only last 10 games
+  localStorage.setItem("gameReplays", JSON.stringify(replays));
+}
+
+function loadGameReplays() {
+  return JSON.parse(localStorage.getItem("gameReplays") || "[]");
+}
+
+function replayGame(replayIndex) {
+  const replays = loadGameReplays();
+  if (replayIndex >= replays.length) return;
+  const replay = replays[replayIndex];
+
+  gameActive = true;
+  mode = replay.mode;
+  current = "red";
+  moveLog = [...replay.moves];
+  moveCount = 0;
+
+  stock = {
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
+  };
+
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
+  buildBoard();
+  buildStocks();
+  updateStatus(`Replaying Game | Step 0/${moveLog.length}`);
+
+  let moveIndex = 0;
+  const replayInterval = setInterval(() => {
+    if (moveIndex >= moveLog.length) {
+      clearInterval(replayInterval);
+      updateStatus(replay.finalWinner ? replay.finalWinner.toUpperCase() + " wins!" : "Game ended");
+      return;
+    }
+
+    const m = moveLog[moveIndex];
+    place(cells[m.r][m.c], m.color, m.size);
+    stock[m.color][m.size]--;
+    current = current === "red" ? "blue" : "red";
+    buildStocks();
+    updateStatus(`Replaying Game | Step ${moveIndex + 1}/${moveLog.length}`);
+    moveIndex++;
+  }, 500);
 }
 
 // ── Board ──────────────────────────────────────────────
@@ -882,6 +946,7 @@ function dropLogic(color, size, cell) {
   if (checkWin(color)) {
     updateStatus(color.toUpperCase() + " wins!");
     gameActive = false;
+    saveGameReplay();
     return;
   }
 
@@ -905,6 +970,7 @@ function dropLogic(color, size, cell) {
   } else {
     updateStatus("No valid moves — " + current + " wins by default!");
     gameActive = false;
+    saveGameReplay();
   }
 }
 
