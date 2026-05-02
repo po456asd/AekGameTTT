@@ -270,14 +270,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
       <p>Game Code:</p>
       <input type="text" id="gameCodeDisplay" readonly>
       <button onclick="copyGameCode()">📋 Copy Link</button>
-      <p style="font-size:13px;">Share with friend. Waiting for them to join...</p>
+      <p style="font-size:13px;"><span class="loading"></span> Share with friend. Waiting for them to join...</p>
       <p id="p2pStatus"></p>
       <button onclick="closeP2PModal()">Cancel</button>
     </div>
     <div id="p2pInput" style="display:none;">
       <p>Enter Game Code:</p>
       <input type="text" id="gameCodeInput" placeholder="Paste game code here">
-      <button onclick="joinP2PGame()">Join Game</button>
+      <button onclick="joinP2PGame(event)">Join Game</button>
       <button onclick="closeP2PModal()">Cancel</button>
     </div>
   </div>
@@ -441,26 +441,55 @@ function createP2PGame() {
     conn = c;
     conn.on("open", () => startP2PGame("blue"));
     conn.on("data", data => handleP2PMove(data));
+    conn.on("close", () => {
+      gameActive = false;
+      updateStatus("Opponent disconnected");
+    });
   });
-  peer.on("error", err => updateStatus("Error: " + err.type));
+  peer.on("error", err => {
+    alert("Host error: " + err.type);
+    closeP2PModal();
+  });
 }
 
-function joinP2PGame() {
+function joinP2PGame(ev) {
   const code = document.getElementById("gameCodeInput").value.trim();
   if (!code) { alert("Enter game code"); return; }
 
-  const joinBtn = event.target;
+  const joinBtn = ev?.target || document.querySelector('#p2pInput button');
   joinBtn.disabled = true;
   joinBtn.textContent = "⟳ Connecting...";
 
   peer = new Peer();
+
+  const timeout = setTimeout(() => {
+    if (peer && !peer.destroyed) {
+      peer.destroy();
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join Game";
+      alert("Connection timeout. Check code and try again.");
+    }
+  }, 15000);
+
+  peer.on("error", err => {
+    clearTimeout(timeout);
+    joinBtn.disabled = false;
+    joinBtn.textContent = "Join Game";
+    alert("Connection error: " + err.type);
+  });
+
   peer.on("open", () => {
     conn = peer.connect(code);
     conn.on("open", () => {
+      clearTimeout(timeout);
       closeP2PModal();
       startP2PGame("red");
     });
     conn.on("data", data => handleP2PMove(data));
+    conn.on("close", () => {
+      gameActive = false;
+      updateStatus("Opponent disconnected");
+    });
     conn.on("error", () => {
       joinBtn.disabled = false;
       joinBtn.textContent = "Join Game";
@@ -474,7 +503,7 @@ function startP2PGame(color) {
   p2pMode = true;
   myColor = color;
   current = "red";
-  thinking = true; // Show loading until first move
+  thinking = false;
   gameActive = true;
 
   stock = {
@@ -899,6 +928,7 @@ if (urlParams.has("join")) {
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pInput").style.display = "block";
     document.getElementById("gameCodeInput").value = urlParams.get("join");
+    setTimeout(() => document.querySelector('#p2pInput button').click(), 100);
   }, 500);
 }
 </script>
