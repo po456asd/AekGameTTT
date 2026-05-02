@@ -236,7 +236,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button onclick="startPCGame('easy')">😊 Easy</button>
   <button onclick="startPCGame('normal')">🤔 Normal</button>
   <button onclick="startPCGame('hell')">😈 Hell</button>
-  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic + fork detection</div>
+  <button onclick="startPCGame('demon')">👿 DEMON</button>
+  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: unbeatable</div>
   <button onclick="hideDifficultyMenu()">↩ Back</button>
 </div>
 
@@ -739,7 +740,8 @@ function nextTurn() {
     current = "yellow";
     thinking = true;
     buildStocks();
-    updateStatus(`<span class="loading"></span> PC thinking... [${pcDifficulty}]`);
+    const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
+    updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}]`);
     setTimeout(pcMove, 600);
   } else {
     current = current === "red" ? "blue" : "red";
@@ -818,6 +820,7 @@ function pcNoMoves() {
 function pcMove() {
   if (pcDifficulty === "easy")   pcMoveEasy();
   else if (pcDifficulty === "hell") pcMoveHell();
+  else if (pcDifficulty === "demon") pcMoveDemon();
   else pcMoveNormal();
 }
 
@@ -916,6 +919,63 @@ function scoreHell(move) {
 
   cells[r][c].piece = backup;
   return score;
+}
+
+// ── PC DEMON (unbeatable via minimax) ───────────────
+function pcMoveDemon() {
+  const move = findWinningMove("yellow");
+  if (move) { doPCMove(move); return; }
+  move = findWinningMove("red");
+  if (move) { doPCMove(move); return; }
+
+  const moves = getAllMoves("yellow");
+  if (!moves.length) { pcNoMoves(); return; }
+
+  let best = null, bestScore = -Infinity;
+  for (const m of moves) {
+    const score = minimax(m, 4, true); // depth 4 for strong play
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  doPCMove(best);
+}
+
+function minimax(move, depth, isMaximizing) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  cells[r][c].piece = { color: "yellow", size: move.size };
+
+  if (checkWin("yellow")) {
+    cells[r][c].piece = backup;
+    return 1000 + depth;
+  }
+  if (checkWin("red")) {
+    cells[r][c].piece = backup;
+    return -1000 - depth;
+  }
+
+  if (depth === 0) {
+    const score = scoreHell({ cell: { row: r, col: c }, size: move.size });
+    cells[r][c].piece = backup;
+    return score;
+  }
+
+  const opponentColor = isMaximizing ? "red" : "yellow";
+  const myColor = isMaximizing ? "yellow" : "red";
+  const nextMoves = getAllMoves(opponentColor);
+
+  if (!nextMoves.length) {
+    cells[r][c].piece = backup;
+    return isMaximizing ? 500 : -500;
+  }
+
+  let bestScore = isMaximizing ? -Infinity : Infinity;
+  for (const nm of nextMoves) {
+    const score = minimax(nm, depth - 1, !isMaximizing);
+    bestScore = isMaximizing ? Math.max(bestScore, score) : Math.min(bestScore, score);
+  }
+
+  cells[r][c].piece = backup;
+  return bestScore;
 }
 
 // ── Init ───────────────────────────────────────────────
