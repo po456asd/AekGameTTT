@@ -365,7 +365,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   </div>
 </div>
 
-<audio id="bgMusic" style="display:none;"></audio>
+<audio id="bgMusic" style="display:none;" src="Tetris%2099%20-%20Main%20Theme.mp3" autoplay></audio>
 
 <div id="menu">
   <button onclick="startGame('pvp')">👥 PvP Local</button>
@@ -476,7 +476,7 @@ const bgMusic = document.getElementById("bgMusic");
 const tetrisAudioUrl = "https://www.youtube.com/watch?v=63hoSNvS6Z4";
 
 function initMusic() {
-  bgMusic.src = "https://r4---sn-5hne6nxy.googlevideo.com/videoplayback?expire=1714780800&ei=test&ip=0.0.0.0&id=o-test&itag=251&source=youtube&requiressl=yes&mh=test&mm=31,26&mn=sn-5hne6nxy&ms=aug,onr&mv=m&mvi=4&pl=24&gcr=us&initcwndbps=625000&vprv=1&mime=audio/webm&ns=test&gir=yes&clen=2000000&dur=120&lmt=1111111111111&mt=1714758900&fvip=4&keepalive=yes&fexp=24007246&c=WEB&txp=6318224&n=test&sparams=expire,ei,ip,id,itag,source,requiressl,mh,mm,mn,ms,mv,mvi,pl,gcr,initcwndbps,vprv,mime,ns,gir,clen,dur,lmt&sig=test&rn=test&rbuf=1111";
+  bgMusic.src = "Tetris%2099%20-%20Main%20Theme.mp3";
   bgMusic.loop = false;
   bgMusic.volume = 0.5;
   bgMusic.addEventListener("ended", () => {

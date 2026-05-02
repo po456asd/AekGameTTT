@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1777738306712,
+  "projectRoot": "C:\\Users\\White\\OneDrive\\AHK\\AekGameTTT",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {},
+  "hotPaths": [
+    {
+      "path": "index.html",
+      "accessCount": 205,
+      "lastAccessed": 1777742816699,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\launch.json",
+      "accessCount": 1,
+      "lastAccessed": 1777738468785,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 1,
+      "lastAccessed": 1777741530044,
+      "type": "directory"
+    }
+  ],
+  "userDirectives": []
+}
