@@ -127,6 +127,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 6px;
   width: 100px;
   flex-shrink: 0;
+  transition: box-shadow 0.3s ease;
+}
+
+.stock.active {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+.stock.red.active {
+  box-shadow: 0 0 20px rgba(255, 68, 68, 0.6), inset 0 0 15px rgba(255, 68, 68, 0.2);
+}
+
+.stock.blue.active {
+  box-shadow: 0 0 20px rgba(68, 136, 255, 0.6), inset 0 0 15px rgba(68, 136, 255, 0.2);
+}
+
+.stock.yellow.active {
+  box-shadow: 0 0 20px rgba(255, 221, 51, 0.6), inset 0 0 15px rgba(255, 221, 51, 0.2);
 }
 
 .stockItem {
@@ -877,8 +894,23 @@ function buildStocks() {
   const right = document.getElementById("rightStock");
   left.innerHTML = "";
   right.innerHTML = "";
+  const rightColor = p2pMode ? "blue" : (mode === "pvp" ? "blue" : "yellow");
   createStock(left, "red");
-  createStock(right, p2pMode ? "blue" : (mode === "pvp" ? "blue" : "yellow"));
+  createStock(right, rightColor);
+
+  // Add active glow to current player's stock
+  left.classList.remove("active");
+  right.classList.remove("active");
+  left.classList.remove("red", "blue", "yellow");
+  right.classList.remove("red", "blue", "yellow");
+  left.classList.add("red");
+  right.classList.add(rightColor);
+
+  if (current === "red") {
+    left.classList.add("active");
+  } else {
+    right.classList.add("active");
+  }
 }
 
 function createStock(box, color) {
