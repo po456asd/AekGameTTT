@@ -53,9 +53,7 @@ h2 { margin: 0; flex: 1; }
   border-radius: 4px;
 }
 
-.theme-toggle:hover {
-  opacity: 0.8;
-}
+.theme-toggle:hover { opacity: 0.8; }
 
 button {
   margin: 4px;
@@ -72,13 +70,11 @@ button:hover { opacity: 0.8; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 #menu { display: block; }
+#difficultyMenu { display: none; }
 #game { display: none; justify-content: center; gap: 20px; margin-top: 10px; }
 #status { margin: 10px 0; font-size: 16px; min-height: 20px; }
 
-#board {
-  display: grid;
-  gap: 6px;
-}
+#board { display: grid; gap: 6px; }
 
 .cell {
   width: 64px;
@@ -94,10 +90,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .cell:hover { opacity: 0.9; }
 
-.piece {
-  image-rendering: pixelated;
-  border-radius: 4px;
-}
+.piece { image-rendering: pixelated; border-radius: 4px; }
 
 .small { width: 20px; height: 20px; }
 .large { width: 52px; height: 52px; }
@@ -130,14 +123,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-wrap: wrap;
 }
 
+.diff-desc {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 4px 0 12px 0;
+}
+
 .modal {
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7);
   z-index: 1000;
   justify-content: center;
   align-items: center;
@@ -166,12 +163,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 4px;
 }
 
-.copy-btn {
-  margin: 10px 0;
-  padding: 8px 16px;
-}
-
-#game.flex { display: flex; }
+.copy-btn { margin: 10px 0; padding: 8px 16px; }
 
 @media (max-width: 768px) {
   #game { flex-direction: column; }
@@ -190,8 +182,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <div id="menu">
   <button onclick="startGame('pvp')">👥 PvP Local</button>
-  <button onclick="startGame('pc')">🤖 Vs PC</button>
+  <button onclick="showDifficultyMenu()">🤖 Vs PC</button>
   <button onclick="showP2PMenu()">🌐 Online P2P</button>
+</div>
+
+<div id="difficultyMenu">
+  <p>Select Difficulty:</p>
+  <button onclick="startPCGame('easy')">😊 Easy</button>
+  <button onclick="startPCGame('normal')">🤔 Normal</button>
+  <button onclick="startPCGame('hell')">😈 Hell</button>
+  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic + fork detection</div>
+  <button onclick="hideDifficultyMenu()">↩ Back</button>
 </div>
 
 <div id="status"></div>
@@ -218,7 +219,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
       <p>Game Code:</p>
       <input type="text" id="gameCodeDisplay" readonly>
       <button class="copy-btn" onclick="copyGameCode()">📋 Copy Link</button>
-      <p>Share this with a friend. Waiting for them to join...</p>
+      <p>Share with a friend. Waiting for them to join...</p>
       <p id="p2pStatus"></p>
       <button onclick="closeP2PModal()">Cancel</button>
     </div>
@@ -232,46 +233,61 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 </div>
 
 <script>
-let mode="pvp", current="red", thinking=false;
-let cells=[], boardSize=4;
+let mode = "pvp", current = "red", thinking = false;
+let cells = [], boardSize = 4;
 let stock;
 let gameActive = false;
 let p2pMode = false;
 let myColor = null;
+let pcDifficulty = "normal";
 let peer, conn, remoteId;
 
 const board = document.getElementById("board");
 const status = document.getElementById("status");
 
 document.addEventListener("dragstart", e => {
-  if (!e.target.classList.contains("piece")) {
-    e.preventDefault();
-  }
+  if (!e.target.classList.contains("piece")) e.preventDefault();
 });
 
+// ── Theme ──────────────────────────────────────────────
 function toggleTheme() {
-  const html = document.documentElement;
-  html.classList.toggle("light");
-  localStorage.setItem("theme", html.classList.contains("light") ? "light" : "dark");
+  document.documentElement.classList.toggle("light");
+  localStorage.setItem("theme", document.documentElement.classList.contains("light") ? "light" : "dark");
 }
 
 function loadTheme() {
-  const saved = localStorage.getItem("theme") || "dark";
-  if (saved === "light") {
+  if ((localStorage.getItem("theme") || "dark") === "light")
     document.documentElement.classList.add("light");
-  }
+}
+
+// ── Menu ───────────────────────────────────────────────
+function showDifficultyMenu() {
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("difficultyMenu").style.display = "block";
+}
+
+function hideDifficultyMenu() {
+  document.getElementById("difficultyMenu").style.display = "none";
+  document.getElementById("menu").style.display = "block";
+}
+
+function startPCGame(diff) {
+  pcDifficulty = diff;
+  hideDifficultyMenu();
+  startGame("pc");
 }
 
 function startGame(m) {
   mode = m;
   p2pMode = false;
+  myColor = null;
   current = "red";
   thinking = false;
   gameActive = true;
 
   stock = {
-    red: { small: 8, large: 4 },
-    blue: { small: 8, large: 4 },
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
     yellow: { small: 8, large: 4 }
   };
 
@@ -285,9 +301,30 @@ function startGame(m) {
   updateStatus();
 }
 
+function backToMenu() {
+  gameActive = false;
+  if (peer) peer.destroy();
+  if (conn) conn.close();
+  peer = conn = null;
+
+  document.getElementById("menu").style.display = "block";
+  document.getElementById("game").style.display = "none";
+  document.getElementById("resetBtn").style.display = "none";
+  document.getElementById("menuBtn").style.display = "none";
+}
+
+function resetGame() {
+  if (p2pMode && conn) {
+    conn.send({ type: "reset" });
+    startP2PGame(myColor);
+  } else {
+    startGame(mode);
+  }
+}
+
+// ── P2P ────────────────────────────────────────────────
 function showP2PMenu() {
-  const modal = document.getElementById("p2pModal");
-  modal.classList.add("active");
+  document.getElementById("p2pModal").classList.add("active");
 }
 
 function closeP2PModal() {
@@ -305,51 +342,28 @@ function showJoinInput() {
 
 function createP2PGame() {
   peer = new Peer();
-
   peer.on("open", id => {
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pJoin").style.display = "block";
     document.getElementById("gameCodeDisplay").value = id;
   });
-
   peer.on("connection", c => {
     conn = c;
-    conn.on("open", () => {
-      startP2PGame("blue");
-    });
-    conn.on("data", data => {
-      handleP2PMove(data);
-    });
+    conn.on("open", () => startP2PGame("blue"));
+    conn.on("data", data => handleP2PMove(data));
   });
-
-  peer.on("error", err => {
-    updateStatus("Error: " + err.type);
-  });
+  peer.on("error", err => updateStatus("Error: " + err.type));
 }
 
 function joinP2PGame() {
-  const code = document.getElementById("gameCodeInput").value;
-  if (!code) {
-    alert("Enter game code");
-    return;
-  }
-
+  const code = document.getElementById("gameCodeInput").value.trim();
+  if (!code) { alert("Enter game code"); return; }
   peer = new Peer();
-
-  peer.on("open", id => {
+  peer.on("open", () => {
     conn = peer.connect(code);
-
-    conn.on("open", () => {
-      startP2PGame("red");
-    });
-
-    conn.on("data", data => {
-      handleP2PMove(data);
-    });
-
-    conn.on("error", err => {
-      updateStatus("Connection error");
-    });
+    conn.on("open", () => startP2PGame("red"));
+    conn.on("data", data => handleP2PMove(data));
+    conn.on("error", () => updateStatus("Connection error"));
   });
 }
 
@@ -362,8 +376,8 @@ function startP2PGame(color) {
   gameActive = true;
 
   stock = {
-    red: { small: 8, large: 4 },
-    blue: { small: 8, large: 4 },
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
     yellow: { small: 8, large: 4 }
   };
 
@@ -379,10 +393,7 @@ function startP2PGame(color) {
 }
 
 function handleP2PMove(data) {
-  if (data.type === "reset") {
-    startP2PGame(myColor);
-    return;
-  }
+  if (data.type === "reset") { startP2PGame(myColor); return; }
 
   const { r, c, size, color } = data;
   place(cells[r][c], color, size);
@@ -400,6 +411,13 @@ function handleP2PMove(data) {
   updateStatus();
 }
 
+function copyGameCode() {
+  const code = document.getElementById("gameCodeDisplay").value;
+  navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
+  alert("Game link copied!");
+}
+
+// ── Board ──────────────────────────────────────────────
 function updateStatus(txt) {
   status.textContent = txt || `Turn: ${current}`;
 }
@@ -408,7 +426,6 @@ function buildBoard() {
   board.innerHTML = "";
   cells = [];
   board.style.gridTemplateColumns = `repeat(${boardSize}, 64px)`;
-
   for (let r = 0; r < boardSize; r++) {
     cells[r] = [];
     for (let c = 0; c < boardSize; c++) {
@@ -430,14 +447,8 @@ function buildStocks() {
   const right = document.getElementById("rightStock");
   left.innerHTML = "";
   right.innerHTML = "";
-
   createStock(left, "red");
-
-  if (p2pMode) {
-    createStock(right, "blue");
-  } else {
-    createStock(right, mode === "pvp" ? "blue" : "yellow");
-  }
+  createStock(right, p2pMode ? "blue" : (mode === "pvp" ? "blue" : "yellow"));
 }
 
 function createStock(box, color) {
@@ -459,7 +470,9 @@ function createStock(box, color) {
     const p = document.createElement("div");
     p.className = `piece ${s} ${color}`;
 
-    const canDrag = p2pMode ? (color === myColor && color === current) : (color === current);
+    const canDrag = p2pMode
+      ? (color === myColor && color === current)
+      : (color === current);
     p.draggable = canDrag && !thinking && stock[color][s] > 0;
     p.style.cursor = p.draggable ? "grab" : "default";
     p.style.opacity = p.draggable ? "1" : "0.5";
@@ -491,10 +504,10 @@ function place(cell, color, size) {
 
 function drop(e, cell) {
   if (!gameActive || thinking) return;
-
   const size = e.dataTransfer.getData("size");
   const color = e.dataTransfer.getData("color");
 
+  if (p2pMode && color !== myColor) return;
   if (color !== current || stock[color][size] <= 0) return;
   if (!canPlace(cell, size)) return;
 
@@ -502,9 +515,7 @@ function drop(e, cell) {
   stock[color][size]--;
   buildStocks();
 
-  if (p2pMode && conn) {
-    conn.send({ r: cell.row, c: cell.col, size, color });
-  }
+  if (p2pMode && conn) conn.send({ r: cell.row, c: cell.col, size, color });
 
   if (checkWin(color)) {
     updateStatus(color.toUpperCase() + " wins!");
@@ -519,24 +530,20 @@ function drop(e, cell) {
     return;
   }
 
-  if (hasValidMoves(current === "red" ? "blue" : "red")) {
+  const next = current === "red" ? (mode === "pvp" ? "blue" : "yellow") : "red";
+  if (hasValidMoves(next)) {
     nextTurn();
   } else {
-    updateStatus("No valid moves - " + current + " wins by default!");
+    updateStatus("No valid moves — " + current + " wins by default!");
     gameActive = false;
   }
 }
 
 function hasValidMoves(color) {
-  for (let r = 0; r < boardSize; r++) {
-    for (let c = 0; c < boardSize; c++) {
-      for (let s of ["small", "large"]) {
-        if (stock[color][s] > 0 && canPlace(cells[r][c], s)) {
-          return true;
-        }
-      }
-    }
-  }
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
+      for (let s of ["small", "large"])
+        if (stock[color][s] > 0 && canPlace(cells[r][c], s)) return true;
   return false;
 }
 
@@ -553,23 +560,20 @@ function checkWin(color) {
     if (checkLine([...Array(boardSize)].map((_, c) => [i, c]), color)) return true;
     if (checkLine([...Array(boardSize)].map((_, r) => [r, i]), color)) return true;
   }
-
   if (checkLine([...Array(boardSize)].map((_, i) => [i, i]), color)) return true;
   if (checkLine([...Array(boardSize)].map((_, i) => [i, boardSize - 1 - i]), color)) return true;
-
-  if (checkLine([[0, 0], [0, 3], [3, 0], [3, 3]], color)) return true;
-  if (checkLine([[1, 1], [1, 2], [2, 1], [2, 2]], color)) return true;
-
+  if (checkLine([[0,0],[0,3],[3,0],[3,3]], color)) return true;
+  if (checkLine([[1,1],[1,2],[2,1],[2,2]], color)) return true;
   return false;
 }
 
 function nextTurn() {
   if (mode === "pc" && current === "red") {
     current = "yellow";
-    updateStatus("PC thinking...");
+    updateStatus(`PC thinking... [${pcDifficulty}]`);
     thinking = true;
     buildStocks();
-    setTimeout(pcMove, 800);
+    setTimeout(pcMove, 600);
   } else {
     current = current === "red" ? "blue" : "red";
     buildStocks();
@@ -577,41 +581,45 @@ function nextTurn() {
   }
 }
 
-function pcMove() {
-  let move = findWinningMove("yellow");
-  if (move) {
-    doPCMove(move);
-    return;
-  }
-
-  move = findWinningMove("red");
-  if (move) {
-    doPCMove(move);
-    return;
-  }
-
+// ── PC AI shared helpers ───────────────────────────────
+function getAllMoves(color) {
   let moves = [];
-  for (let r = 0; r < boardSize; r++) {
-    for (let c = 0; c < boardSize; c++) {
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
       for (let s of ["small", "large"]) {
-        if (stock.yellow[s] <= 0) continue;
+        if (stock[color][s] <= 0) continue;
         if (!canPlace(cells[r][c], s)) continue;
         moves.push({ cell: cells[r][c], size: s });
       }
-    }
-  }
+  return moves;
+}
 
-  if (moves.length) {
-    let pick = moves[Math.floor(Math.random() * moves.length)];
-    doPCMove(pick);
-    return;
+function getWinLines() {
+  let lines = [];
+  for (let i = 0; i < boardSize; i++) {
+    lines.push([...Array(boardSize)].map((_, c) => [i, c]));
+    lines.push([...Array(boardSize)].map((_, r) => [r, i]));
   }
+  lines.push([...Array(boardSize)].map((_, i) => [i, i]));
+  lines.push([...Array(boardSize)].map((_, i) => [i, boardSize - 1 - i]));
+  lines.push([[0,0],[0,3],[3,0],[3,3]]);
+  lines.push([[1,1],[1,2],[2,1],[2,2]]);
+  return lines;
+}
 
-  thinking = false;
-  current = "red";
-  buildStocks();
-  updateStatus("No valid moves - Red wins by default!");
-  gameActive = false;
+function findWinningMove(color) {
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
+      for (let s of ["small", "large"]) {
+        if (stock[color]?.[s] === 0) continue;
+        if (!canPlace(cells[r][c], s)) continue;
+        const backup = cells[r][c].piece;
+        cells[r][c].piece = { color, size: s };
+        const win = checkWin(color);
+        cells[r][c].piece = backup;
+        if (win) return { cell: cells[r][c], size: s };
+      }
+  return null;
 }
 
 function doPCMove(move) {
@@ -631,51 +639,140 @@ function doPCMove(move) {
   updateStatus();
 }
 
-function findWinningMove(color) {
-  for (let r = 0; r < boardSize; r++) {
-    for (let c = 0; c < boardSize; c++) {
-      for (let s of ["small", "large"]) {
-        if (stock[color]?.[s] === 0) continue;
-        if (!canPlace(cells[r][c], s)) continue;
+function pcNoMoves() {
+  thinking = false;
+  current = "red";
+  buildStocks();
+  updateStatus("No valid moves — Red wins by default!");
+  gameActive = false;
+}
 
-        let backup = cells[r][c].piece;
-        cells[r][c].piece = { color, size: s };
-        let win = checkWin(color);
-        cells[r][c].piece = backup;
+// ── PC dispatcher ──────────────────────────────────────
+function pcMove() {
+  if (pcDifficulty === "easy") pcMoveEasy();
+  else if (pcDifficulty === "hell") pcMoveHell();
+  else pcMoveNormal();
+}
 
-        if (win) return { cell: cells[r][c], size: s };
-      }
+// ── Easy: random 80%, win/block 20% ───────────────────
+function pcMoveEasy() {
+  if (Math.random() < 0.2) {
+    const move = findWinningMove("yellow") || findWinningMove("red");
+    if (move) { doPCMove(move); return; }
+  }
+  const moves = getAllMoves("yellow");
+  if (moves.length) {
+    doPCMove(moves[Math.floor(Math.random() * moves.length)]);
+  } else {
+    pcNoMoves();
+  }
+}
+
+// ── Normal: win > block > random ──────────────────────
+function pcMoveNormal() {
+  let move = findWinningMove("yellow");
+  if (move) { doPCMove(move); return; }
+  move = findWinningMove("red");
+  if (move) { doPCMove(move); return; }
+  const moves = getAllMoves("yellow");
+  if (moves.length) {
+    doPCMove(moves[Math.floor(Math.random() * moves.length)]);
+  } else {
+    pcNoMoves();
+  }
+}
+
+// ── Hell: win > block > fork > strategic score ────────
+function pcMoveHell() {
+  let move = findWinningMove("yellow");
+  if (move) { doPCMove(move); return; }
+
+  move = findWinningMove("red");
+  if (move) { doPCMove(move); return; }
+
+  move = findFork("yellow");
+  if (move) { doPCMove(move); return; }
+
+  move = findFork("red");
+  if (move) { doPCMove(move); return; }
+
+  const moves = getAllMoves("yellow");
+  if (!moves.length) { pcNoMoves(); return; }
+
+  let best = null, bestScore = -Infinity;
+  for (const m of moves) {
+    const score = scoreHell(m);
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  doPCMove(best);
+}
+
+// Find a move that creates 2+ simultaneous winning threats
+function findFork(color) {
+  const moves = getAllMoves(color);
+  for (const m of moves) {
+    const r = m.cell.row, c = m.cell.col;
+    const backup = cells[r][c].piece;
+    cells[r][c].piece = { color, size: m.size };
+
+    let winCount = 0;
+    const followUp = getAllMoves(color);
+    for (const nm of followUp) {
+      const r2 = nm.cell.row, c2 = nm.cell.col;
+      const backup2 = cells[r2][c2].piece;
+      cells[r2][c2].piece = { color, size: nm.size };
+      if (checkWin(color)) winCount++;
+      cells[r2][c2].piece = backup2;
+      if (winCount >= 2) break;
     }
+
+    cells[r][c].piece = backup;
+    if (winCount >= 2) return m;
   }
   return null;
 }
 
-function resetGame() {
-  if (p2pMode && conn) {
-    conn.send({ type: "reset" });
-    startP2PGame(myColor);
-  } else {
-    startGame(mode);
+// Position value table: center > corners > edges
+const POS_SCORE = [
+  [2, 1, 1, 2],
+  [1, 4, 4, 1],
+  [1, 4, 4, 1],
+  [2, 1, 1, 2]
+];
+
+function scoreHell(move) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  cells[r][c].piece = { color: "yellow", size: move.size };
+
+  let score = POS_SCORE[r][c];
+
+  const lines = getWinLines();
+  for (const line of lines) {
+    let yCount = 0, rCount = 0;
+    for (const [lr, lc] of line) {
+      if (cells[lr][lc].piece?.color === "yellow") yCount++;
+      else if (cells[lr][lc].piece?.color === "red") rCount++;
+    }
+    // Open yellow paths (no red blocking)
+    if (rCount === 0) score += yCount * 3;
+    // Block red paths (no yellow blocking)
+    if (yCount === 0) score += rCount * 2;
+    // Bonus for near-complete yellow line
+    if (rCount === 0 && yCount === boardSize - 1) score += 10;
   }
+
+  // Bonus for covering opponent's piece
+  if (backup?.color === "red") score += 6;
+
+  // Prefer small pieces to conserve large
+  if (move.size === "small" && stock.yellow.large > 0) score += 1;
+
+  cells[r][c].piece = backup;
+  return score;
 }
 
-function backToMenu() {
-  gameActive = false;
-  if (peer) peer.destroy();
-  if (conn) conn.close();
-
-  document.getElementById("menu").style.display = "block";
-  document.getElementById("game").style.display = "none";
-  document.getElementById("resetBtn").style.display = "none";
-  document.getElementById("menuBtn").style.display = "none";
-}
-
-function copyGameCode() {
-  const code = document.getElementById("gameCodeDisplay").value;
-  navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
-  alert("Game link copied!");
-}
-
+// ── Init ───────────────────────────────────────────────
 loadTheme();
 
 const urlParams = new URLSearchParams(window.location.search);
