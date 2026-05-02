@@ -237,6 +237,7 @@ let cells=[], boardSize=4;
 let stock;
 let gameActive = false;
 let p2pMode = false;
+let myColor = null;
 let peer, conn, remoteId;
 
 const board = document.getElementById("board");
@@ -355,7 +356,8 @@ function joinP2PGame() {
 function startP2PGame(color) {
   mode = "p2p";
   p2pMode = true;
-  current = color;
+  myColor = color;
+  current = "red";
   thinking = false;
   gameActive = true;
 
@@ -377,19 +379,23 @@ function startP2PGame(color) {
 }
 
 function handleP2PMove(data) {
+  if (data.type === "reset") {
+    startP2PGame(myColor);
+    return;
+  }
+
   const { r, c, size, color } = data;
   place(cells[r][c], color, size);
   stock[color][size]--;
-  buildStocks();
 
   if (checkWin(color)) {
+    buildStocks();
     updateStatus(color.toUpperCase() + " wins!");
     gameActive = false;
     return;
   }
 
   current = current === "red" ? "blue" : "red";
-  thinking = false;
   buildStocks();
   updateStatus();
 }
@@ -453,8 +459,8 @@ function createStock(box, color) {
     const p = document.createElement("div");
     p.className = `piece ${s} ${color}`;
 
-    const isOurColor = p2pMode ? (color === current) : (color === current);
-    p.draggable = isOurColor && !thinking && stock[color][s] > 0;
+    const canDrag = p2pMode ? (color === myColor && color === current) : (color === current);
+    p.draggable = canDrag && !thinking && stock[color][s] > 0;
     p.style.cursor = p.draggable ? "grab" : "default";
     p.style.opacity = p.draggable ? "1" : "0.5";
 
@@ -503,6 +509,13 @@ function drop(e, cell) {
   if (checkWin(color)) {
     updateStatus(color.toUpperCase() + " wins!");
     gameActive = false;
+    return;
+  }
+
+  if (p2pMode) {
+    current = current === "red" ? "blue" : "red";
+    buildStocks();
+    updateStatus();
     return;
   }
 
@@ -640,8 +653,10 @@ function findWinningMove(color) {
 function resetGame() {
   if (p2pMode && conn) {
     conn.send({ type: "reset" });
+    startP2PGame(myColor);
+  } else {
+    startGame(mode);
   }
-  startGame(mode);
 }
 
 function backToMenu() {
@@ -666,7 +681,7 @@ loadTheme();
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has("join")) {
   setTimeout(() => {
-    showP2PModal();
+    showP2PMenu();
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pInput").style.display = "block";
     document.getElementById("gameCodeInput").value = urlParams.get("join");
