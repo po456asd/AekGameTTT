@@ -105,6 +105,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   pointer-events: none;
 }
 
+.piece.place-anim {
+  animation: placePiece 0.4s ease-out;
+}
+
+@keyframes placePiece {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 .small { width: 20px; height: 20px; }
 .large { width: 50px; height: 50px; }
 
@@ -689,7 +699,7 @@ function handleP2PMove(data) {
     // Regular move message
     thinking = false; // Clear loading when opponent moves
     const { r, c, size, color, id } = data;
-    place(cells[r][c], color, size);
+    place(cells[r][c], color, size, true); // Animate opponent's move
     stock[color][size]--;
     moveLog.push(data);
     moveCount++;
@@ -904,10 +914,11 @@ function canPlace(cell, size) {
   return false;
 }
 
-function place(cell, color, size) {
+function place(cell, color, size, animate = false) {
   cell.innerHTML = "";
   const p = document.createElement("div");
   p.className = `piece ${size} ${color}`;
+  if (animate) p.classList.add("place-anim");
   cell.appendChild(p);
   cell.piece = { color, size };
 }
