@@ -448,12 +448,24 @@ function createP2PGame() {
 function joinP2PGame() {
   const code = document.getElementById("gameCodeInput").value.trim();
   if (!code) { alert("Enter game code"); return; }
+
+  const joinBtn = event.target;
+  joinBtn.disabled = true;
+  joinBtn.textContent = "⟳ Connecting...";
+
   peer = new Peer();
   peer.on("open", () => {
     conn = peer.connect(code);
-    conn.on("open", () => startP2PGame("red"));
+    conn.on("open", () => {
+      closeP2PModal();
+      startP2PGame("red");
+    });
     conn.on("data", data => handleP2PMove(data));
-    conn.on("error", () => updateStatus("Connection error"));
+    conn.on("error", () => {
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join Game";
+      alert("Failed to connect. Check game code.");
+    });
   });
 }
 
