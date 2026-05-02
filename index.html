@@ -1297,8 +1297,13 @@ function scoreHell(move) {
 function pcMoveDemon() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
-  move = findWinningMove("red");
-  if (move) { doPCMove(move); return; }
+
+  // Only block with LARGE pieces (avoid vulnerable small blocks)
+  const blockMove = findWinningMove("red");
+  if (blockMove && blockMove.size === "large") {
+    doPCMove(blockMove);
+    return;
+  }
 
   const moves = getAllMoves("yellow");
   if (!moves.length) { pcNoMoves(); return; }
