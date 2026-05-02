@@ -1643,6 +1643,15 @@ loadTheme();
 loadSound();
 initMusic();
 
+// Auto-play music on first user interaction (browser autoplay policy)
+function playMusicOnFirstInteraction() {
+  bgMusic.play().catch(() => {});
+  document.removeEventListener("click", playMusicOnFirstInteraction);
+  document.removeEventListener("touchstart", playMusicOnFirstInteraction);
+}
+document.addEventListener("click", playMusicOnFirstInteraction);
+document.addEventListener("touchstart", playMusicOnFirstInteraction);
+
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has("join")) {
   setTimeout(() => {
