@@ -82,7 +82,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 #menu { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 #difficultyMenu { display: none; flex-direction: column; align-items: center; gap: 8px; }
-#game { display: none; justify-content: center; gap: 12px; margin-top: 10px; align-items: center; }
+#game { display: none; flex-direction: row; justify-content: center; gap: 12px; margin-top: 10px; align-items: center; }
 #status { margin: 8px 0; font-size: 15px; min-height: 20px; }
 
 #board { display: grid; gap: 5px; flex-shrink: 0; }
@@ -131,6 +131,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 100px;
   flex-shrink: 0;
   transition: box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .stock.active {
@@ -294,9 +297,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   h2 { font-size: clamp(14px, 3vw, 18px); }
   button { min-height: 44px; min-width: 44px; padding: 10px 12px; font-size: 13px; margin: 3px; }
   #menu, #difficultyMenu { gap: 6px; }
-  #game { flex-direction: column; gap: 8px; }
-  .stock { width: 90px; padding: 5px; }
-  .stockItem { margin: 3px; padding: 4px 3px; font-size: 12px; }
+  #game { flex-direction: column; gap: 6px; }
+  #board { order: 2; }
+  #leftStock { order: 1; width: 100%; flex-direction: row; justify-content: center; padding: 4px; }
+  #rightStock { order: 3; width: 100%; flex-direction: row; justify-content: center; padding: 4px; }
+  .stock { width: auto; padding: 4px; }
+  .stockItem { margin: 2px; padding: 4px 3px; font-size: 12px; width: 50px; min-height: 50px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; gap: 2px; }
+  .piece { pointer-events: auto; }
+  .small { width: 24px; height: 24px; }
+  .large { width: 24px; height: 24px; }
   .controls { gap: 6px; margin-top: 8px; }
   .diff-desc { font-size: 10px; margin: 3px 0 8px 0; }
 }
@@ -307,7 +316,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .large { width: 44px; height: 44px; }
   .small { width: 18px; height: 18px; }
   #game { gap: 4px; }
-  .stock { width: 80px; }
+  #leftStock { width: 100%; flex-direction: row; justify-content: center; padding: 3px; }
+  #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 3px; }
+  .stock { width: auto; padding: 3px; }
+  .stockItem { width: 48px; min-height: 48px; }
+  .small { width: 20px; height: 20px; }
+  .large { width: 20px; height: 20px; }
   h2 { font-size: 14px; }
   button { padding: 8px 10px; font-size: 12px; }
   .modal-content { width: 95%; padding: 15px; }
@@ -319,7 +333,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .cell { width: 44px; height: 44px; }
   .large { width: 38px; height: 38px; }
   .small { width: 16px; height: 16px; }
-  .stock { width: 70px; padding: 4px; }
+  #leftStock { width: 100%; flex-direction: row; justify-content: center; padding: 2px; }
+  #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 2px; }
+  .stock { width: auto; padding: 2px; }
+  .stockItem { width: 44px; min-height: 44px; }
+  .small { width: 18px; height: 18px; }
+  .large { width: 18px; height: 18px; }
   h2 { font-size: 13px; }
   button { padding: 6px 8px; font-size: 11px; margin: 2px; }
   #menu { gap: 4px; }
