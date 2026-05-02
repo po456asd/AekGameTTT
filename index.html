@@ -304,8 +304,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .stock { width: auto; padding: 4px; }
   .stockItem { margin: 2px; padding: 4px 3px; font-size: 12px; width: 50px; min-height: 50px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; gap: 2px; }
   .piece { pointer-events: auto; }
-  .small { width: 24px; height: 24px; }
-  .large { width: 24px; height: 24px; }
+  .small { width: 18px; height: 18px; }
+  .large { width: 28px; height: 28px; }
   .controls { gap: 6px; margin-top: 8px; }
   .diff-desc { font-size: 10px; margin: 3px 0 8px 0; }
 }
@@ -320,8 +320,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 3px; }
   .stock { width: auto; padding: 3px; }
   .stockItem { width: 48px; min-height: 48px; }
-  .small { width: 20px; height: 20px; }
-  .large { width: 20px; height: 20px; }
+  .small { width: 16px; height: 16px; }
+  .large { width: 26px; height: 26px; }
   h2 { font-size: 14px; }
   button { padding: 8px 10px; font-size: 12px; }
   .modal-content { width: 95%; padding: 15px; }
@@ -337,8 +337,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 2px; }
   .stock { width: auto; padding: 2px; }
   .stockItem { width: 44px; min-height: 44px; }
-  .small { width: 18px; height: 18px; }
-  .large { width: 18px; height: 18px; }
+  .small { width: 14px; height: 14px; }
+  .large { width: 24px; height: 24px; }
   h2 { font-size: 13px; }
   button { padding: 6px 8px; font-size: 11px; margin: 2px; }
   #menu { gap: 4px; }
@@ -354,11 +354,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <div class="header">
   <h2>Gobble Bingo 4x4</h2>
-  <div style="display:flex;gap:8px;">
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div id="musicPlayer" style="display:flex;gap:4px;align-items:center;padding:4px 8px;background:var(--cell-bg);border:1px solid var(--cell-border);border-radius:4px;">
+      <button id="musicToggle" onclick="toggleMusic()" style="margin:0;padding:4px 8px;font-size:12px;" title="Play/Pause music">🎵</button>
+      <input id="volumeSlider" type="range" min="0" max="100" value="50" onchange="setMusicVolume(this.value)" style="width:60px;cursor:pointer;" title="Volume">
+      <button id="loopToggle" onclick="toggleLoop()" style="margin:0;padding:4px 8px;font-size:12px;" title="Loop music">🔁</button>
+    </div>
     <button class="theme-toggle" id="soundToggle" onclick="toggleSound()" title="Toggle sound">🔊</button>
     <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
   </div>
 </div>
+
+<audio id="bgMusic" style="display:none;"></audio>
 
 <div id="menu">
   <button onclick="startGame('pvp')">👥 PvP Local</button>
@@ -460,6 +467,44 @@ function loadSound() {
   soundEnabled = saved === null ? true : saved === "true";
   const toggle = document.getElementById("soundToggle");
   if (toggle) toggle.textContent = soundEnabled ? "🔊" : "🔇";
+}
+
+// ── Music Player ───────────────────────────────────
+let musicPlaying = false;
+let musicLooping = false;
+const bgMusic = document.getElementById("bgMusic");
+const tetrisAudioUrl = "https://www.youtube.com/watch?v=63hoSNvS6Z4";
+
+function initMusic() {
+  bgMusic.src = "https://r4---sn-5hne6nxy.googlevideo.com/videoplayback?expire=1714780800&ei=test&ip=0.0.0.0&id=o-test&itag=251&source=youtube&requiressl=yes&mh=test&mm=31,26&mn=sn-5hne6nxy&ms=aug,onr&mv=m&mvi=4&pl=24&gcr=us&initcwndbps=625000&vprv=1&mime=audio/webm&ns=test&gir=yes&clen=2000000&dur=120&lmt=1111111111111&mt=1714758900&fvip=4&keepalive=yes&fexp=24007246&c=WEB&txp=6318224&n=test&sparams=expire,ei,ip,id,itag,source,requiressl,mh,mm,mn,ms,mv,mvi,pl,gcr,initcwndbps,vprv,mime,ns,gir,clen,dur,lmt&sig=test&rn=test&rbuf=1111";
+  bgMusic.loop = false;
+  bgMusic.volume = 0.5;
+  bgMusic.addEventListener("ended", () => {
+    if (musicLooping) bgMusic.currentTime = 0;
+  });
+}
+
+function toggleMusic() {
+  const btn = document.getElementById("musicToggle");
+  if (musicPlaying) {
+    bgMusic.pause();
+    musicPlaying = false;
+    btn.textContent = "🎵";
+  } else {
+    bgMusic.play().catch(e => console.log("Music play failed:", e));
+    musicPlaying = true;
+    btn.textContent = "⏸";
+  }
+}
+
+function setMusicVolume(value) {
+  bgMusic.volume = value / 100;
+}
+
+function toggleLoop() {
+  const btn = document.getElementById("loopToggle");
+  musicLooping = !musicLooping;
+  btn.style.opacity = musicLooping ? "1" : "0.5";
 }
 
 let mode = "pvp", current = "red", thinking = false;
@@ -1596,6 +1641,7 @@ function minimax(move, depth, isMaximizing, alpha = -Infinity, beta = Infinity) 
 // ── Init ───────────────────────────────────────────────
 loadTheme();
 loadSound();
+initMusic();
 
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has("join")) {
