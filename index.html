@@ -932,14 +932,16 @@ function pcMoveDemon() {
   if (!moves.length) { pcNoMoves(); return; }
 
   let best = null, bestScore = -Infinity;
+  const startTime = Date.now();
   for (const m of moves) {
-    const score = minimax(m, 4, true); // depth 4 for strong play
+    if (Date.now() - startTime > 2000) break; // 2s timeout
+    const score = minimax(m, 3, true); // depth 3
     if (score > bestScore) { bestScore = score; best = m; }
   }
-  doPCMove(best);
+  doPCMove(best || moves[0]);
 }
 
-function minimax(move, depth, isMaximizing) {
+function minimax(move, depth, isMaximizing, alpha = -Infinity, beta = Infinity) {
   const r = move.cell.row, c = move.cell.col;
   const backup = cells[r][c].piece;
   cells[r][c].piece = { color: "yellow", size: move.size };
@@ -959,10 +961,7 @@ function minimax(move, depth, isMaximizing) {
     return score;
   }
 
-  const opponentColor = isMaximizing ? "red" : "yellow";
-  const myColor = isMaximizing ? "yellow" : "red";
-  const nextMoves = getAllMoves(opponentColor);
-
+  const nextMoves = getAllMoves(isMaximizing ? "red" : "yellow");
   if (!nextMoves.length) {
     cells[r][c].piece = backup;
     return isMaximizing ? 500 : -500;
@@ -970,8 +969,12 @@ function minimax(move, depth, isMaximizing) {
 
   let bestScore = isMaximizing ? -Infinity : Infinity;
   for (const nm of nextMoves) {
-    const score = minimax(nm, depth - 1, !isMaximizing);
+    const score = minimax(nm, depth - 1, !isMaximizing, alpha, beta);
     bestScore = isMaximizing ? Math.max(bestScore, score) : Math.min(bestScore, score);
+
+    // Alpha-beta pruning
+    if (isMaximizing) { alpha = Math.max(alpha, bestScore); if (beta <= alpha) break; }
+    else { beta = Math.min(beta, bestScore); if (beta <= alpha) break; }
   }
 
   cells[r][c].piece = backup;
