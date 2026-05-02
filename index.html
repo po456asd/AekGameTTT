@@ -1278,7 +1278,16 @@ function scoreHell(move) {
   }
 
   if (backup?.color === "red") score += 6;
-  if (move.size === "small" && stock.yellow.large > 0) score += 1;
+
+  // Penalize small pieces if opponent has large pieces (can be covered easily)
+  if (move.size === "small" && stock.red.large > 0) {
+    score -= 5; // Strong penalty for vulnerable small pieces
+  }
+
+  // Bonus for covering opponent's small piece
+  if (move.size === "large" && backup?.color === "red" && backup.size === "small") {
+    score += 15; // Reward covering opponent pieces
+  }
 
   cells[r][c].piece = backup;
   return score;
@@ -1297,8 +1306,8 @@ function pcMoveDemon() {
   let best = null, bestScore = -Infinity;
   const startTime = Date.now();
   for (const m of moves) {
-    if (Date.now() - startTime > 4000) break; // 4s timeout
-    const score = minimax(m, 4, true); // depth 4 - reads 4 moves ahead
+    if (Date.now() - startTime > 5000) break; // 5s timeout
+    const score = minimax(m, 5, true); // depth 5 - reads 5 moves ahead
     if (score > bestScore) { bestScore = score; best = m; }
   }
   doPCMove(best || moves[0]);
