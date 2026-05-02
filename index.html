@@ -211,7 +211,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <div class="modal-content">
     <h3>Online Multiplayer</h3>
     <div id="p2pCreate">
-      <button onclick="createP2PGame()">Create Game</button>
+      <button onclick="createP2PGame()">➕ Create Game</button>
+      <button onclick="showJoinInput()">📥 Join Game</button>
     </div>
     <div id="p2pJoin" style="display:none;">
       <p>Game Code:</p>
@@ -293,6 +294,12 @@ function closeP2PModal() {
   document.getElementById("p2pCreate").style.display = "block";
   document.getElementById("p2pJoin").style.display = "none";
   document.getElementById("p2pInput").style.display = "none";
+}
+
+function showJoinInput() {
+  document.getElementById("p2pCreate").style.display = "none";
+  document.getElementById("p2pInput").style.display = "block";
+  document.getElementById("gameCodeInput").focus();
 }
 
 function createP2PGame() {
