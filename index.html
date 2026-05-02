@@ -225,6 +225,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   animation: liftStock 0.2s ease-out forwards;
 }
 
+@keyframes breathingGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,255,255,0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
+
+@keyframes morphIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+#menu.morph, #difficultyMenu.morph {
+  animation: morphIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#menu button, #difficultyMenu button {
+  animation: breathingGlow 3s ease-in-out infinite;
+}
+
 .modal {
   display: none;
   position: fixed;
@@ -279,7 +297,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <div class="header">
   <h2>Gobble Bingo 4x4</h2>
-  <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+  <div style="display:flex;gap:8px;">
+    <button class="theme-toggle" id="soundToggle" onclick="toggleSound()" title="Toggle sound">🔊</button>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+  </div>
 </div>
 
 <div id="menu">
@@ -342,6 +363,48 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 </div>
 
 <script>
+// ── Audio System ───────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let soundEnabled = true;
+
+function playSound(freq, duration = 0.1, volume = 0.3, type = "sine") {
+  if (!soundEnabled) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function playClick() { playSound(800, 0.08, 0.2); }
+function playMove() { playSound(400, 0.12, 0.25); }
+function playEat() {
+  playSound(150, 0.08, 0.35, "sine");
+  setTimeout(() => playSound(120, 0.08, 0.35, "sine"), 60);
+  setTimeout(() => playSound(100, 0.1, 0.35, "sine"), 120);
+}
+function playWin() { playSound(800, 0.2, 0.3); setTimeout(() => playSound(1000, 0.2, 0.3), 100); }
+function playError() { playSound(200, 0.15, 0.2); }
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem("soundEnabled", soundEnabled ? "true" : "false");
+  const toggle = document.getElementById("soundToggle");
+  toggle.textContent = soundEnabled ? "🔊" : "🔇";
+}
+
+function loadSound() {
+  const saved = localStorage.getItem("soundEnabled");
+  soundEnabled = saved === null ? true : saved === "true";
+  const toggle = document.getElementById("soundToggle");
+  if (toggle) toggle.textContent = soundEnabled ? "🔊" : "🔇";
+}
+
 let mode = "pvp", current = "red", thinking = false;
 let cells = [], boardSize = 4;
 let stock;
@@ -367,6 +430,7 @@ let pingTimeout = null;
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 const ghostEl  = document.getElementById("touchGhost");
+
 
 // ── Touch drag state ───────────────────────────────────
 let touchDrag = null; // { color, size }
@@ -422,13 +486,23 @@ function loadTheme() {
 
 // ── Menu ───────────────────────────────────────────────
 function showDifficultyMenu() {
+  playClick();
   document.getElementById("menu").style.display = "none";
-  document.getElementById("difficultyMenu").style.display = "block";
+  const dMenu = document.getElementById("difficultyMenu");
+  dMenu.style.display = "block";
+  dMenu.classList.remove("morph");
+  void dMenu.offsetWidth;
+  dMenu.classList.add("morph");
 }
 
 function hideDifficultyMenu() {
+  playClick();
   document.getElementById("difficultyMenu").style.display = "none";
-  document.getElementById("menu").style.display = "block";
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
 }
 
 function startPCGame(diff) {
@@ -438,6 +512,7 @@ function startPCGame(diff) {
 }
 
 function startGame(m) {
+  playClick();
   mode = m;
   p2pMode = false;
   myColor = null;
@@ -462,6 +537,7 @@ function startGame(m) {
 }
 
 function backToMenu() {
+  playClick();
   gameActive = false;
   touchDrag = null;
   ghostEl.style.display = "none";
@@ -470,13 +546,20 @@ function backToMenu() {
   if (conn) conn.close();
   peer = conn = null;
 
-  document.getElementById("menu").style.display = "block";
   document.getElementById("game").style.display = "none";
   document.getElementById("resetBtn").style.display = "none";
   document.getElementById("menuBtn").style.display = "none";
+  statusEl.textContent = "";
+
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
 }
 
 function resetGame() {
+  playClick();
   if (p2pMode && conn) {
     conn.send({ type: "reset" });
     startP2PGame(myColor);
@@ -524,10 +607,12 @@ function shortPeerId(peerId) {
 
 // ── P2P ────────────────────────────────────────────────
 function showP2PMenu() {
+  playClick();
   document.getElementById("p2pModal").classList.add("active");
 }
 
 function closeP2PModal() {
+  playClick();
   document.getElementById("p2pModal").classList.remove("active");
   document.getElementById("p2pCreate").style.display = "block";
   document.getElementById("p2pJoin").style.display = "none";
@@ -535,12 +620,14 @@ function closeP2PModal() {
 }
 
 function showJoinInput() {
+  playClick();
   document.getElementById("p2pCreate").style.display = "none";
   document.getElementById("p2pInput").style.display = "block";
   document.getElementById("gameCodeInput").focus();
 }
 
 function createP2PGame() {
+  playClick();
   peer = new Peer({
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
@@ -572,6 +659,7 @@ function createP2PGame() {
 }
 
 function joinP2PGame(ev) {
+  playClick();
   const code = document.getElementById("gameCodeInput").value.trim();
   if (!code) { alert("Enter game code"); return; }
 
@@ -732,6 +820,7 @@ function handleP2PMove(data) {
   if (data.type === "movelog_response") {
     // Replay moves to resync
     for (const m of data.moves) {
+      playMove();
       place(cells[m.r][m.c], m.color, m.size);
       stock[m.color][m.size]--;
     }
@@ -743,6 +832,7 @@ function handleP2PMove(data) {
     // Regular move message
     thinking = false; // Clear loading when opponent moves
     const { r, c, size, color, id } = data;
+    playMove();
     place(cells[r][c], color, size, true); // Animate opponent's move
     stock[color][size]--;
     moveLog.push(data);
@@ -758,6 +848,7 @@ function handleP2PMove(data) {
     }
 
     if (checkWin(color)) {
+      playWin();
       buildStocks();
       updateStatus(color.toUpperCase() + " wins!");
       gameActive = false;
@@ -773,6 +864,7 @@ function handleP2PMove(data) {
 }
 
 function copyGameCode() {
+  playClick();
   const code = document.getElementById("gameCodeDisplay").value;
   navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
   alert("Game link copied!");
@@ -988,6 +1080,7 @@ function place(cell, color, size, animate = false) {
 
   // Explosion effect if large covers small
   if (hadSmall && isLarge) {
+    playEat();
     p.style.animation = "explosion 0.6s ease-out, glow 1.5s ease-in-out";
     boardEl.style.animation = "boardShake 0.5s ease-in-out";
     setTimeout(() => { boardEl.style.animation = ""; }, 500);
@@ -1000,9 +1093,10 @@ function dropLogic(color, size, cell) {
   if (!gameActive) return;
   if (!color || !size || !cell) return;
   if (p2pMode && color !== myColor) return;
-  if (color !== current || stock[color][size] <= 0) return;
-  if (!canPlace(cell, size)) return;
+  if (color !== current || stock[color][size] <= 0) { playError(); return; }
+  if (!canPlace(cell, size)) { playError(); return; }
 
+  playMove();
   place(cell, color, size);
   stock[color][size]--;
   buildStocks();
@@ -1026,6 +1120,7 @@ function dropLogic(color, size, cell) {
   moveCount++;
 
   if (checkWin(color)) {
+    playWin();
     updateStatus(color.toUpperCase() + " wins!");
     gameActive = false;
     saveGameReplay();
@@ -1050,7 +1145,12 @@ function dropLogic(color, size, cell) {
   if (hasValidMoves(next)) {
     nextTurn();
   } else {
-    updateStatus("No valid moves — " + current + " wins by default!");
+    if (!hasValidMoves(current)) {
+      updateStatus("Draw! No valid moves for either player!");
+    } else {
+      playWin();
+      updateStatus("No valid moves — " + current + " wins by default!");
+    }
     gameActive = false;
     saveGameReplay();
   }
@@ -1157,11 +1257,13 @@ function findWinningMove(color) {
 }
 
 function doPCMove(move) {
+  playMove();
   place(move.cell, "yellow", move.size, true); // Animate PC move
   stock.yellow[move.size]--;
   buildStocks();
 
   if (checkWin("yellow")) {
+    playWin();
     updateStatus("YELLOW wins!");
     gameActive = false;
     return;
@@ -1177,7 +1279,12 @@ function pcNoMoves() {
   thinking = false;
   current = "red";
   buildStocks();
-  updateStatus("No valid moves — Red wins by default!");
+  if (!hasValidMoves("yellow")) {
+    updateStatus("Draw! No valid moves for either player!");
+  } else {
+    playWin();
+    updateStatus("No valid moves — Red wins by default!");
+  }
   gameActive = false;
 }
 
@@ -1431,6 +1538,7 @@ function minimax(move, depth, isMaximizing, alpha = -Infinity, beta = Infinity) 
 
 // ── Init ───────────────────────────────────────────────
 loadTheme();
+loadSound();
 
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has("join")) {
