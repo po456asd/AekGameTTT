@@ -1298,11 +1298,18 @@ function pcMoveDemon() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
 
-  // Only block with LARGE pieces (avoid vulnerable small blocks)
+  // Smart blocking: prefer large, but use small if opponent is about to win
   const blockMove = findWinningMove("red");
-  if (blockMove && blockMove.size === "large") {
-    doPCMove(blockMove);
-    return;
+  if (blockMove) {
+    if (blockMove.size === "large") {
+      doPCMove(blockMove);
+      return;
+    }
+    // If block is small, only use if opponent has no large pieces (safe from cover)
+    if (stock.red.large === 0) {
+      doPCMove(blockMove);
+      return;
+    }
   }
 
   const moves = getAllMoves("yellow");
