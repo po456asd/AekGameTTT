@@ -294,6 +294,13 @@ let myColor = null;
 let pcDifficulty = "normal";
 let peer, conn;
 
+// P2P sync tracking
+let pendingMoveId = null;
+let moveTimeout = null;
+let moveLog = [];
+let moveCount = 0;
+let heartbeatInterval = null;
+
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 const ghostEl  = document.getElementById("touchGhost");
@@ -432,7 +439,12 @@ function showJoinInput() {
 }
 
 function createP2PGame() {
-  peer = new Peer();
+  peer = new Peer({
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.services.mozilla.com:3478" }
+    ]
+  });
   peer.on("open", id => {
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pJoin").style.display = "block";
@@ -461,7 +473,12 @@ function joinP2PGame(ev) {
   joinBtn.disabled = true;
   joinBtn.textContent = "⟳ Connecting...";
 
-  peer = new Peer();
+  peer = new Peer({
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.services.mozilla.com:3478" }
+    ]
+  });
 
   const timeout = setTimeout(() => {
     if (peer && !peer.destroyed) {
@@ -507,6 +524,12 @@ function startP2PGame(color) {
   thinking = false;
   gameActive = true;
 
+  // Reset P2P sync state
+  moveLog = [];
+  moveCount = 0;
+  pendingMoveId = null;
+  if (moveTimeout) clearTimeout(moveTimeout);
+
   stock = {
     red:    { small: 8, large: 4 },
     blue:   { small: 8, large: 4 },
@@ -522,25 +545,81 @@ function startP2PGame(color) {
   buildBoard();
   buildStocks();
   updateStatus();
+
+  // Start keep-alive heartbeat
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    if (conn && gameActive) conn.send({ type: "ping" });
+  }, 10000);
 }
 
 function handleP2PMove(data) {
   if (data.type === "reset") { startP2PGame(myColor); return; }
-  thinking = false; // Clear loading when opponent moves
-  const { r, c, size, color } = data;
-  place(cells[r][c], color, size);
-  stock[color][size]--;
-
-  if (checkWin(color)) {
-    buildStocks();
-    updateStatus(color.toUpperCase() + " wins!");
-    gameActive = false;
+  if (data.type === "ping") return; // Keep-alive, ignore
+  if (data.type === "ack") {
+    if (data.id === pendingMoveId) {
+      if (moveTimeout) clearTimeout(moveTimeout);
+      pendingMoveId = null;
+    }
     return;
   }
 
-  current = current === "red" ? "blue" : "red";
-  buildStocks();
-  updateStatus();
+  if (data.type === "verify") {
+    const localHash = hashBoard();
+    if (localHash !== data.hash) {
+      // Hash mismatch - request move log from opponent to resync
+      conn.send({ type: "movelog_request", fromMove: data.moveCount });
+    }
+    return;
+  }
+
+  if (data.type === "movelog_request") {
+    // Send move log from requested point
+    const moves = moveLog.slice(data.fromMove);
+    conn.send({ type: "movelog_response", moves });
+    return;
+  }
+
+  if (data.type === "movelog_response") {
+    // Replay moves to resync
+    for (const m of data.moves) {
+      place(cells[m.r][m.c], m.color, m.size);
+      stock[m.color][m.size]--;
+    }
+    buildStocks();
+    return;
+  }
+
+  if (data.type === "move") {
+    // Regular move message
+    thinking = false; // Clear loading when opponent moves
+    const { r, c, size, color, id } = data;
+    place(cells[r][c], color, size);
+    stock[color][size]--;
+    moveLog.push(data);
+    moveCount++;
+
+    // Send ACK
+    if (conn) conn.send({ type: "ack", id });
+
+    // Verify hash every 3 moves
+    if (moveCount % 3 === 0) {
+      const hash = hashBoard();
+      conn.send({ type: "verify", hash, moveCount });
+    }
+
+    if (checkWin(color)) {
+      buildStocks();
+      updateStatus(color.toUpperCase() + " wins!");
+      gameActive = false;
+      return;
+    }
+
+    current = current === "red" ? "blue" : "red";
+    buildStocks();
+    updateStatus();
+    return;
+  }
 }
 
 function copyGameCode() {
@@ -682,7 +761,22 @@ function dropLogic(color, size, cell) {
   stock[color][size]--;
   buildStocks();
 
-  if (p2pMode && conn) conn.send({ r: cell.row, c: cell.col, size, color });
+  if (p2pMode && conn) {
+    const moveId = Date.now();
+    moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
+    pendingMoveId = moveId;
+    conn.send({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId });
+
+    // Wait for ACK, timeout after 5s = resend
+    if (moveTimeout) clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(() => {
+      if (pendingMoveId === moveId) {
+        conn.send({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId });
+      }
+    }, 5000);
+  }
+
+  moveCount++;
 
   if (checkWin(color)) {
     updateStatus(color.toUpperCase() + " wins!");
@@ -691,6 +785,12 @@ function dropLogic(color, size, cell) {
   }
 
   if (p2pMode) {
+    // Verify hash every 3 moves
+    if (moveCount % 3 === 0) {
+      const hash = hashBoard();
+      conn.send({ type: "verify", hash, moveCount });
+    }
+
     current = current === "red" ? "blue" : "red";
     thinking = current !== myColor; // Show loading if waiting for opponent
     buildStocks();
@@ -733,6 +833,22 @@ function checkWin(color) {
   if (checkLine([[0,0],[0,3],[3,0],[3,3]], color)) return true;
   if (checkLine([[1,1],[1,2],[2,1],[2,2]], color)) return true;
   return false;
+}
+
+// Hash board state for sync verification
+function hashBoard() {
+  let hash = 0;
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      const cell = cells[r][c];
+      if (cell.piece) {
+        const colorIdx = { red: 1, blue: 2, yellow: 3 }[cell.piece.color] || 0;
+        const sizeIdx = cell.piece.size === "small" ? 1 : 2;
+        hash = (hash * 10 + colorIdx * 3 + sizeIdx) % 1000000;
+      }
+    }
+  }
+  return hash;
 }
 
 function nextTurn() {
@@ -923,7 +1039,7 @@ function scoreHell(move) {
 
 // ── PC DEMON (unbeatable via minimax) ───────────────
 function pcMoveDemon() {
-  const move = findWinningMove("yellow");
+  let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
   move = findWinningMove("red");
   if (move) { doPCMove(move); return; }
