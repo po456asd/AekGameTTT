@@ -308,6 +308,8 @@ let lastMessageTime = null;
 let inactivityCheck = null;
 let myPeerId = null;
 let myGameCode = null;
+let connectionStats = { latency: 0, attempts: 0, sentPackets: 0, recvPackets: 0, lastPingTime: null };
+let pingTimeout = null;
 
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
@@ -617,10 +619,17 @@ function startP2PGame(color) {
   buildStocks();
   updateStatus();
 
-  // Start keep-alive heartbeat
+  // Start keep-alive heartbeat with latency measurement
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   heartbeatInterval = setInterval(() => {
-    if (conn && gameActive) conn.send({ type: "ping" });
+    if (conn && gameActive) {
+      connectionStats.lastPingTime = Date.now();
+      conn.send({ type: "ping", ts: connectionStats.lastPingTime });
+      if (pingTimeout) clearTimeout(pingTimeout);
+      pingTimeout = setTimeout(() => {
+        connectionStats.latency = 9999; // Timeout indicator
+      }, 5000);
+    }
   }, 10000);
 
   // Start inactivity timeout
@@ -629,8 +638,19 @@ function startP2PGame(color) {
 
 function handleP2PMove(data) {
   lastMessageTime = Date.now(); // Update inactivity timer
+  connectionStats.recvPackets++;
   if (data.type === "reset") { startP2PGame(myColor); return; }
-  if (data.type === "ping") return; // Keep-alive, ignore
+  if (data.type === "ping") {
+    if (conn) conn.send({ type: "pong", ts: data.ts });
+    return;
+  }
+  if (data.type === "pong") {
+    if (data.ts && data.ts === connectionStats.lastPingTime) {
+      connectionStats.latency = Date.now() - data.ts;
+      clearTimeout(pingTimeout);
+    }
+    return;
+  }
   if (data.type === "ack") {
     if (data.id === pendingMoveId) {
       if (moveTimeout) clearTimeout(moveTimeout);
@@ -711,7 +731,12 @@ function updateStatus(txt) {
     if (thinking) {
       statusEl.innerHTML = `<span class="loading"></span> Thinking...`;
     } else {
-      statusEl.textContent = `Turn: ${current}`;
+      let status = `Turn: ${current}`;
+      if (p2pMode) {
+        const latencyMs = connectionStats.latency === 9999 ? "∞" : connectionStats.latency + "ms";
+        status += ` | Ping: ${latencyMs}`;
+      }
+      statusEl.textContent = status;
     }
   }
 }
@@ -840,6 +865,7 @@ function dropLogic(color, size, cell) {
     const moveId = Date.now();
     moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
     pendingMoveId = moveId;
+    connectionStats.sentPackets++;
     conn.send({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId });
 
     // Wait for ACK, timeout after 5s = resend
