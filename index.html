@@ -304,6 +304,8 @@ let moveTimeout = null;
 let moveLog = [];
 let moveCount = 0;
 let heartbeatInterval = null;
+let lastMessageTime = null;
+let inactivityCheck = null;
 
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
@@ -405,6 +407,7 @@ function backToMenu() {
   gameActive = false;
   touchDrag = null;
   ghostEl.style.display = "none";
+  stopInactivityCheck();
   if (peer) peer.destroy();
   if (conn) conn.close();
   peer = conn = null;
@@ -422,6 +425,25 @@ function resetGame() {
   } else {
     startGame(mode);
   }
+}
+
+function startInactivityCheck() {
+  if (inactivityCheck) clearInterval(inactivityCheck);
+  lastMessageTime = Date.now();
+  inactivityCheck = setInterval(() => {
+    if (!p2pMode || !conn || !gameActive) return;
+    if (Date.now() - lastMessageTime > 15000) {
+      conn.close();
+      gameActive = false;
+      updateStatus("Opponent timeout — no response for 15s");
+      if (inactivityCheck) clearInterval(inactivityCheck);
+    }
+  }, 2000);
+}
+
+function stopInactivityCheck() {
+  if (inactivityCheck) clearInterval(inactivityCheck);
+  inactivityCheck = null;
 }
 
 // ── P2P ────────────────────────────────────────────────
@@ -460,6 +482,7 @@ function createP2PGame() {
     conn.on("data", data => handleP2PMove(data));
     conn.on("close", () => {
       gameActive = false;
+      stopInactivityCheck();
       updateStatus("Opponent disconnected");
     });
   });
@@ -510,6 +533,7 @@ function joinP2PGame(ev) {
     conn.on("data", data => handleP2PMove(data));
     conn.on("close", () => {
       gameActive = false;
+      stopInactivityCheck();
       updateStatus("Opponent disconnected");
     });
     conn.on("error", () => {
@@ -555,9 +579,13 @@ function startP2PGame(color) {
   heartbeatInterval = setInterval(() => {
     if (conn && gameActive) conn.send({ type: "ping" });
   }, 10000);
+
+  // Start inactivity timeout
+  startInactivityCheck();
 }
 
 function handleP2PMove(data) {
+  lastMessageTime = Date.now(); // Update inactivity timer
   if (data.type === "reset") { startP2PGame(myColor); return; }
   if (data.type === "ping") return; // Keep-alive, ignore
   if (data.type === "ack") {
