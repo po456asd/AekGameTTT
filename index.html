@@ -36,6 +36,10 @@ body {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .header {
@@ -73,9 +77,9 @@ button {
 button:hover { opacity: 0.8; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-#menu { display: block; }
-#difficultyMenu { display: none; }
-#game { display: none; justify-content: center; gap: 12px; margin-top: 10px; align-items: flex-start; }
+#menu { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#difficultyMenu { display: none; flex-direction: column; align-items: center; gap: 8px; }
+#game { display: none; justify-content: center; gap: 12px; margin-top: 10px; align-items: center; }
 #status { margin: 8px 0; font-size: 15px; min-height: 20px; }
 
 #board { display: grid; gap: 5px; flex-shrink: 0; }
