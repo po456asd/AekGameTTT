@@ -462,7 +462,7 @@ function startP2PGame(color) {
   p2pMode = true;
   myColor = color;
   current = "red";
-  thinking = false;
+  thinking = true; // Show loading until first move
   gameActive = true;
 
   stock = {
@@ -484,6 +484,7 @@ function startP2PGame(color) {
 
 function handleP2PMove(data) {
   if (data.type === "reset") { startP2PGame(myColor); return; }
+  thinking = false; // Clear loading when opponent moves
   const { r, c, size, color } = data;
   place(cells[r][c], color, size);
   stock[color][size]--;
@@ -628,7 +629,8 @@ function place(cell, color, size) {
 
 // Shared drop logic used by both mouse drop and touch drop
 function dropLogic(color, size, cell) {
-  if (!gameActive || thinking) return;
+  thinking = false; // Clear loading on first move
+  if (!gameActive) return;
   if (!color || !size || !cell) return;
   if (p2pMode && color !== myColor) return;
   if (color !== current || stock[color][size] <= 0) return;
@@ -648,6 +650,7 @@ function dropLogic(color, size, cell) {
 
   if (p2pMode) {
     current = current === "red" ? "blue" : "red";
+    thinking = current !== myColor; // Show loading if waiting for opponent
     buildStocks();
     updateStatus();
     return;
