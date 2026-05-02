@@ -1,31 +1,197 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gobble Bingo 4x4</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <style>
-body{background:#111;color:#fff;font-family:monospace;text-align:center}
-button{margin:4px;padding:6px 12px;font-size:14px}
-#game{display:none;justify-content:center;gap:20px;margin-top:10px}
-#board{display:grid;gap:6px}
-.cell{width:64px;height:64px;background:#333;border:3px solid #555;display:flex;align-items:center;justify-content:center}
-.piece{image-rendering:pixelated}
-.small{width:20px;height:20px}
-.large{width:52px;height:52px}
-.red{background:#ff4444}
-.blue{background:#4488ff}
-.yellow{background:#ffdd33}
-.stock{border:2px solid #555;padding:6px;width:120px}
-.stockItem{margin:6px;padding:4px;border:1px solid #444}
+:root {
+  --bg: #111;
+  --text: #fff;
+  --cell-bg: #333;
+  --cell-border: #555;
+  --stock-border: #555;
+  --stock-item-border: #444;
+}
+
+html.light {
+  --bg: #f5f5f5;
+  --text: #222;
+  --cell-bg: #ddd;
+  --cell-border: #999;
+  --stock-border: #bbb;
+  --stock-item-border: #ccc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: monospace;
+  text-align: center;
+  padding: 20px;
+  transition: background 0.3s, color 0.3s;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+h2 { margin: 0; flex: 1; }
+
+.theme-toggle {
+  padding: 6px 12px;
+  cursor: pointer;
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  color: var(--text);
+  border-radius: 4px;
+}
+
+.theme-toggle:hover {
+  opacity: 0.8;
+}
+
+button {
+  margin: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  background: var(--cell-bg);
+  color: var(--text);
+  border: 1px solid var(--cell-border);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button:hover { opacity: 0.8; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#menu { display: block; }
+#game { display: none; justify-content: center; gap: 20px; margin-top: 10px; }
+#status { margin: 10px 0; font-size: 16px; min-height: 20px; }
+
+#board {
+  display: grid;
+  gap: 6px;
+}
+
+.cell {
+  width: 64px;
+  height: 64px;
+  background: var(--cell-bg);
+  border: 3px solid var(--cell-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: background 0.2s;
+}
+
+.cell:hover { opacity: 0.9; }
+
+.piece {
+  image-rendering: pixelated;
+  border-radius: 4px;
+}
+
+.small { width: 20px; height: 20px; }
+.large { width: 52px; height: 52px; }
+
+.red { background: #ff4444; }
+.blue { background: #4488ff; }
+.yellow { background: #ffdd33; }
+
+.stock {
+  border: 2px solid var(--stock-border);
+  padding: 6px;
+  width: 120px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.stockItem {
+  margin: 6px;
+  padding: 4px;
+  border: 1px solid var(--stock-item-border);
+  background: var(--cell-bg);
+  border-radius: 4px;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal.active { display: flex; }
+
+.modal-content {
+  background: var(--cell-bg);
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid var(--cell-border);
+  max-width: 500px;
+  text-align: center;
+  color: var(--text);
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin: 10px 0;
+  font-family: monospace;
+  border: 1px solid var(--cell-border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+}
+
+.copy-btn {
+  margin: 10px 0;
+  padding: 8px 16px;
+}
+
+#game.flex { display: flex; }
+
+@media (max-width: 768px) {
+  #game { flex-direction: column; }
+  .cell { width: 48px; height: 48px; }
+  .small { width: 15px; height: 15px; }
+  .large { width: 40px; height: 40px; }
+}
 </style>
 </head>
 <body>
 
-<h2>Gobble Bingo 4x4</h2>
+<div class="header">
+  <h2>Gobble Bingo 4x4</h2>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+</div>
 
 <div id="menu">
-  <button onclick="startGame('pvp')">👥 PvP</button>
+  <button onclick="startGame('pvp')">👥 PvP Local</button>
   <button onclick="startGame('pc')">🤖 Vs PC</button>
+  <button onclick="showP2PMenu()">🌐 Online P2P</button>
 </div>
 
 <div id="status"></div>
@@ -36,95 +202,258 @@ button{margin:4px;padding:6px 12px;font-size:14px}
   <div id="rightStock" class="stock"></div>
 </div>
 
+<div class="controls">
+  <button id="resetBtn" onclick="resetGame()" style="display:none;">↻ New Game</button>
+  <button id="menuBtn" onclick="backToMenu()" style="display:none;">⬅ Menu</button>
+</div>
+
+<div id="p2pModal" class="modal">
+  <div class="modal-content">
+    <h3>Online Multiplayer</h3>
+    <div id="p2pCreate">
+      <button onclick="createP2PGame()">Create Game</button>
+    </div>
+    <div id="p2pJoin" style="display:none;">
+      <p>Game Code:</p>
+      <input type="text" id="gameCodeDisplay" readonly>
+      <button class="copy-btn" onclick="copyGameCode()">📋 Copy Link</button>
+      <p>Share this with a friend. Waiting for them to join...</p>
+      <p id="p2pStatus"></p>
+      <button onclick="closeP2PModal()">Cancel</button>
+    </div>
+    <div id="p2pInput" style="display:none;">
+      <p>Enter Game Code:</p>
+      <input type="text" id="gameCodeInput" placeholder="Paste game code here">
+      <button onclick="joinP2PGame()">Join Game</button>
+      <button onclick="closeP2PModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let mode="pvp", current="red", thinking=false;
 let cells=[], boardSize=4;
 let stock;
+let gameActive = false;
+let p2pMode = false;
+let peer, conn, remoteId;
 
-const board=document.getElementById("board");
-const status=document.getElementById("status");
+const board = document.getElementById("board");
+const status = document.getElementById("status");
 
-/* 🔒 ป้องกันลากข้อความทั้งหน้า */
-document.addEventListener("dragstart",e=>{
-  if(!e.target.classList.contains("piece")){
+document.addEventListener("dragstart", e => {
+  if (!e.target.classList.contains("piece")) {
     e.preventDefault();
   }
 });
 
-function startGame(m){
-  mode=m; current="red"; thinking=false;
-  stock={
-    red:{small:8,large:4},
-    blue:{small:8,large:4},
-    yellow:{small:8,large:4}
+function toggleTheme() {
+  const html = document.documentElement;
+  html.classList.toggle("light");
+  localStorage.setItem("theme", html.classList.contains("light") ? "light" : "dark");
+}
+
+function loadTheme() {
+  const saved = localStorage.getItem("theme") || "dark";
+  if (saved === "light") {
+    document.documentElement.classList.add("light");
+  }
+}
+
+function startGame(m) {
+  mode = m;
+  p2pMode = false;
+  current = "red";
+  thinking = false;
+  gameActive = true;
+
+  stock = {
+    red: { small: 8, large: 4 },
+    blue: { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
   };
-  document.getElementById("game").style.display="flex";
+
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
   buildBoard();
   buildStocks();
   updateStatus();
 }
 
-function updateStatus(txt){
-  status.textContent = txt || `ตา: ${current}`;
+function showP2PMenu() {
+  const modal = document.getElementById("p2pModal");
+  modal.classList.add("active");
 }
 
-function buildBoard(){
-  board.innerHTML=""; cells=[];
-  board.style.gridTemplateColumns=`repeat(${boardSize},64px)`;
-  for(let r=0;r<boardSize;r++){
-    cells[r]=[];
-    for(let c=0;c<boardSize;c++){
-      const cell=document.createElement("div");
-      cell.className="cell";
-      cell.piece=null;
-      cell.ondragover=e=>e.preventDefault();
-      cell.ondrop=e=>drop(e,cell);
+function closeP2PModal() {
+  document.getElementById("p2pModal").classList.remove("active");
+  document.getElementById("p2pCreate").style.display = "block";
+  document.getElementById("p2pJoin").style.display = "none";
+  document.getElementById("p2pInput").style.display = "none";
+}
+
+function createP2PGame() {
+  peer = new Peer();
+
+  peer.on("open", id => {
+    document.getElementById("p2pCreate").style.display = "none";
+    document.getElementById("p2pJoin").style.display = "block";
+    document.getElementById("gameCodeDisplay").value = id;
+  });
+
+  peer.on("connection", c => {
+    conn = c;
+    conn.on("open", () => {
+      startP2PGame("blue");
+    });
+    conn.on("data", data => {
+      handleP2PMove(data);
+    });
+  });
+
+  peer.on("error", err => {
+    updateStatus("Error: " + err.type);
+  });
+}
+
+function joinP2PGame() {
+  const code = document.getElementById("gameCodeInput").value;
+  if (!code) {
+    alert("Enter game code");
+    return;
+  }
+
+  peer = new Peer();
+
+  peer.on("open", id => {
+    conn = peer.connect(code);
+
+    conn.on("open", () => {
+      startP2PGame("red");
+    });
+
+    conn.on("data", data => {
+      handleP2PMove(data);
+    });
+
+    conn.on("error", err => {
+      updateStatus("Connection error");
+    });
+  });
+}
+
+function startP2PGame(color) {
+  mode = "p2p";
+  p2pMode = true;
+  current = color;
+  thinking = false;
+  gameActive = true;
+
+  stock = {
+    red: { small: 8, large: 4 },
+    blue: { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
+  };
+
+  closeP2PModal();
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
+  buildBoard();
+  buildStocks();
+  updateStatus();
+}
+
+function handleP2PMove(data) {
+  const { r, c, size, color } = data;
+  place(cells[r][c], color, size);
+  stock[color][size]--;
+  buildStocks();
+
+  if (checkWin(color)) {
+    updateStatus(color.toUpperCase() + " wins!");
+    gameActive = false;
+    return;
+  }
+
+  current = current === "red" ? "blue" : "red";
+  thinking = false;
+  buildStocks();
+  updateStatus();
+}
+
+function updateStatus(txt) {
+  status.textContent = txt || `Turn: ${current}`;
+}
+
+function buildBoard() {
+  board.innerHTML = "";
+  cells = [];
+  board.style.gridTemplateColumns = `repeat(${boardSize}, 64px)`;
+
+  for (let r = 0; r < boardSize; r++) {
+    cells[r] = [];
+    for (let c = 0; c < boardSize; c++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.piece = null;
+      cell.row = r;
+      cell.col = c;
+      cell.ondragover = e => e.preventDefault();
+      cell.ondrop = e => drop(e, cell);
       board.appendChild(cell);
-      cells[r][c]=cell;
+      cells[r][c] = cell;
     }
   }
 }
 
-function buildStocks(){
-  const left=document.getElementById("leftStock");
-  const right=document.getElementById("rightStock");
-  left.innerHTML=""; right.innerHTML="";
-  createStock(left,"red");
-  createStock(right,mode==="pvp"?"blue":"yellow");
+function buildStocks() {
+  const left = document.getElementById("leftStock");
+  const right = document.getElementById("rightStock");
+  left.innerHTML = "";
+  right.innerHTML = "";
+
+  createStock(left, "red");
+
+  if (p2pMode) {
+    createStock(right, "blue");
+  } else {
+    createStock(right, mode === "pvp" ? "blue" : "yellow");
+  }
 }
 
-function createStock(box,color){
-  const h=document.createElement("h4");
-  h.textContent=color.toUpperCase();
-  h.style.userSelect="none";
+function createStock(box, color) {
+  const h = document.createElement("h4");
+  h.textContent = color.toUpperCase();
+  h.style.userSelect = "none";
   box.appendChild(h);
 
-  for(let s of ["small","large"]){
+  for (let s of ["small", "large"]) {
+    const item = document.createElement("div");
+    item.className = "stockItem";
+    item.style.userSelect = "none";
 
-    const item=document.createElement("div");
-    item.className="stockItem";
-    item.style.userSelect="none";
+    const label = document.createElement("span");
+    label.textContent = `${s} x${stock[color][s]}`;
+    label.style.pointerEvents = "none";
+    label.style.userSelect = "none";
 
-    const label=document.createElement("span");
-    label.textContent=`${s} x${stock[color][s]}`;
-    label.style.pointerEvents="none";
-    label.style.userSelect="none";
+    const p = document.createElement("div");
+    p.className = `piece ${s} ${color}`;
 
-    const p=document.createElement("div");
-    p.className=`piece ${s} ${color}`;
+    const isOurColor = p2pMode ? (color === current) : (color === current);
+    p.draggable = isOurColor && !thinking && stock[color][s] > 0;
+    p.style.cursor = p.draggable ? "grab" : "default";
+    p.style.opacity = p.draggable ? "1" : "0.5";
 
-    /* 🎯 ลากได้เฉพาะตาตัวเอง + มี stock + ไม่ใช่ช่วง AI */
-    p.draggable = (
-      color===current &&
-      !thinking &&
-      stock[color][s] > 0
-    );
-
-    p.style.cursor="grab";
-
-    p.ondragstart=e=>{
-      e.dataTransfer.setData("size",s);
-      e.dataTransfer.setData("color",color);
+    p.ondragstart = e => {
+      e.dataTransfer.setData("size", s);
+      e.dataTransfer.setData("color", color);
     };
 
     item.appendChild(label);
@@ -133,142 +462,210 @@ function createStock(box,color){
   }
 }
 
-function canPlace(cell,size){
-
-  // ช่องว่าง → วางได้ทุกขนาด
-  if(!cell.piece) return true;
-
-  // มี small อยู่ → large ทับได้
-  if(cell.piece.size==="small" && size==="large") return true;
-
+function canPlace(cell, size) {
+  if (!cell.piece) return true;
+  if (cell.piece.size === "small" && size === "large") return true;
   return false;
 }
 
-
-function place(cell,color,size){
-  cell.innerHTML="";
-  const p=document.createElement("div");
-  p.className=`piece ${size} ${color}`;
+function place(cell, color, size) {
+  cell.innerHTML = "";
+  const p = document.createElement("div");
+  p.className = `piece ${size} ${color}`;
   cell.appendChild(p);
-  cell.piece={color,size};
+  cell.piece = { color, size };
 }
 
-function drop(e,cell){
-  if(thinking) return;
-  const size=e.dataTransfer.getData("size");
-  const color=e.dataTransfer.getData("color");
-  if(color!==current||stock[color][size]<=0) return;
-  if(!canPlace(cell,size)) return;
+function drop(e, cell) {
+  if (!gameActive || thinking) return;
 
-  place(cell,color,size);
+  const size = e.dataTransfer.getData("size");
+  const color = e.dataTransfer.getData("color");
+
+  if (color !== current || stock[color][size] <= 0) return;
+  if (!canPlace(cell, size)) return;
+
+  place(cell, color, size);
   stock[color][size]--;
   buildStocks();
 
-  if(checkWin(color)){
-    updateStatus(color.toUpperCase()+" ชนะ!");
-    thinking=true;
+  if (p2pMode && conn) {
+    conn.send({ r: cell.row, c: cell.col, size, color });
+  }
+
+  if (checkWin(color)) {
+    updateStatus(color.toUpperCase() + " wins!");
+    gameActive = false;
     return;
   }
-  nextTurn();
+
+  if (hasValidMoves(current === "red" ? "blue" : "red")) {
+    nextTurn();
+  } else {
+    updateStatus("No valid moves - " + current + " wins by default!");
+    gameActive = false;
+  }
 }
 
-function isMatch(cell,color){
-  return cell.piece && cell.piece.color===color;
+function hasValidMoves(color) {
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      for (let s of ["small", "large"]) {
+        if (stock[color][s] > 0 && canPlace(cells[r][c], s)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
-function checkLine(list,color){
-  return list.every(([r,c])=>isMatch(cells[r][c],color));
+function isMatch(cell, color) {
+  return cell.piece && cell.piece.color === color;
 }
 
-function checkWin(color){
+function checkLine(list, color) {
+  return list.every(([r, c]) => isMatch(cells[r][c], color));
+}
 
-  for(let i=0;i<boardSize;i++){
-    if(checkLine([...Array(boardSize)].map((_,c)=>[i,c]),color)) return true;
-    if(checkLine([...Array(boardSize)].map((_,r)=>[r,i]),color)) return true;
+function checkWin(color) {
+  for (let i = 0; i < boardSize; i++) {
+    if (checkLine([...Array(boardSize)].map((_, c) => [i, c]), color)) return true;
+    if (checkLine([...Array(boardSize)].map((_, r) => [r, i]), color)) return true;
   }
 
-  if(checkLine([...Array(boardSize)].map((_,i)=>[i,i]),color)) return true;
-  if(checkLine([...Array(boardSize)].map((_,i)=>[i,boardSize-1-i]),color)) return true;
+  if (checkLine([...Array(boardSize)].map((_, i) => [i, i]), color)) return true;
+  if (checkLine([...Array(boardSize)].map((_, i) => [i, boardSize - 1 - i]), color)) return true;
 
-  if(checkLine([[0,0],[0,3],[3,0],[3,3]],color)) return true;
-  if(checkLine([[1,1],[1,2],[2,1],[2,2]],color)) return true;
+  if (checkLine([[0, 0], [0, 3], [3, 0], [3, 3]], color)) return true;
+  if (checkLine([[1, 1], [1, 2], [2, 1], [2, 2]], color)) return true;
 
   return false;
 }
 
-function nextTurn(){
-  if(mode==="pc"&&current==="red"){
-    current="yellow";
-    updateStatus("PC กำลังคิด...");
-    thinking=true;
+function nextTurn() {
+  if (mode === "pc" && current === "red") {
+    current = "yellow";
+    updateStatus("PC thinking...");
+    thinking = true;
     buildStocks();
-    setTimeout(pcMove,800);
-  }else{
-    current=current==="red"?"blue":"red";
+    setTimeout(pcMove, 800);
+  } else {
+    current = current === "red" ? "blue" : "red";
     buildStocks();
     updateStatus();
   }
 }
 
-function pcMove(){
-  let move=findWinningMove("yellow");
-  if(move){doPCMove(move);return;}
-
-  move=findWinningMove("red");
-  if(move){doPCMove(move);return;}
-
-  let moves=[];
-  for(let r=0;r<boardSize;r++)
-  for(let c=0;c<boardSize;c++)
-  for(let s of ["small","large"]){
-    if(stock.yellow[s]<=0) continue;
-    if(!canPlace(cells[r][c],s)) continue;
-    moves.push({cell:cells[r][c],size:s});
+function pcMove() {
+  let move = findWinningMove("yellow");
+  if (move) {
+    doPCMove(move);
+    return;
   }
 
-  if(moves.length){
-    let pick=moves[Math.floor(Math.random()*moves.length)];
+  move = findWinningMove("red");
+  if (move) {
+    doPCMove(move);
+    return;
+  }
+
+  let moves = [];
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      for (let s of ["small", "large"]) {
+        if (stock.yellow[s] <= 0) continue;
+        if (!canPlace(cells[r][c], s)) continue;
+        moves.push({ cell: cells[r][c], size: s });
+      }
+    }
+  }
+
+  if (moves.length) {
+    let pick = moves[Math.floor(Math.random() * moves.length)];
     doPCMove(pick);
     return;
   }
 
-  thinking=false;
-  current="red";
+  thinking = false;
+  current = "red";
   buildStocks();
-  updateStatus();
+  updateStatus("No valid moves - Red wins by default!");
+  gameActive = false;
 }
 
-function doPCMove(move){
-  place(move.cell,"yellow",move.size);
+function doPCMove(move) {
+  place(move.cell, "yellow", move.size);
   stock.yellow[move.size]--;
   buildStocks();
 
-  if(checkWin("yellow")){
-    updateStatus("YELLOW ชนะ!");
-    thinking=true;
+  if (checkWin("yellow")) {
+    updateStatus("YELLOW wins!");
+    gameActive = false;
     return;
   }
 
-  current="red";
-  thinking=false;
+  current = "red";
+  thinking = false;
   buildStocks();
   updateStatus();
 }
 
-function findWinningMove(color){
-  for(let r=0;r<boardSize;r++)
-  for(let c=0;c<boardSize;c++)
-  for(let s of ["small","large"]){
-    if(stock[color]?.[s]===0) continue;
-    if(!canPlace(cells[r][c],s)) continue;
+function findWinningMove(color) {
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      for (let s of ["small", "large"]) {
+        if (stock[color]?.[s] === 0) continue;
+        if (!canPlace(cells[r][c], s)) continue;
 
-    let backup=cells[r][c].piece;
-    cells[r][c].piece={color,size:s};
-    let win=checkWin(color);
-    cells[r][c].piece=backup;
+        let backup = cells[r][c].piece;
+        cells[r][c].piece = { color, size: s };
+        let win = checkWin(color);
+        cells[r][c].piece = backup;
 
-    if(win) return {cell:cells[r][c],size:s};
+        if (win) return { cell: cells[r][c], size: s };
+      }
+    }
   }
   return null;
 }
+
+function resetGame() {
+  if (p2pMode && conn) {
+    conn.send({ type: "reset" });
+  }
+  startGame(mode);
+}
+
+function backToMenu() {
+  gameActive = false;
+  if (peer) peer.destroy();
+  if (conn) conn.close();
+
+  document.getElementById("menu").style.display = "block";
+  document.getElementById("game").style.display = "none";
+  document.getElementById("resetBtn").style.display = "none";
+  document.getElementById("menuBtn").style.display = "none";
+}
+
+function copyGameCode() {
+  const code = document.getElementById("gameCodeDisplay").value;
+  navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
+  alert("Game link copied!");
+}
+
+loadTheme();
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has("join")) {
+  setTimeout(() => {
+    showP2PModal();
+    document.getElementById("p2pCreate").style.display = "none";
+    document.getElementById("p2pInput").style.display = "block";
+    document.getElementById("gameCodeInput").value = urlParams.get("join");
+  }, 500);
+}
 </script>
+
+</body>
+</html>
