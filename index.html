@@ -210,7 +210,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <div id="p2pModal" class="modal">
   <div class="modal-content">
-    <h3>Online Multiplayer</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;">Online Multiplayer</h3>
+      <button onclick="closeP2PModal()" style="margin:0;padding:4px 10px;font-size:16px;">✕</button>
+    </div>
     <div id="p2pCreate">
       <button onclick="createP2PGame()">➕ Create Game</button>
       <button onclick="showJoinInput()">📥 Join Game</button>
