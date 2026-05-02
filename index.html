@@ -1086,7 +1086,7 @@ function findWinningMove(color) {
 }
 
 function doPCMove(move) {
-  place(move.cell, "yellow", move.size);
+  place(move.cell, "yellow", move.size, true); // Animate PC move
   stock.yellow[move.size]--;
   buildStocks();
 
