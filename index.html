@@ -306,6 +306,8 @@ let moveCount = 0;
 let heartbeatInterval = null;
 let lastMessageTime = null;
 let inactivityCheck = null;
+let myPeerId = null;
+let myGameCode = null;
 
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
@@ -446,6 +448,24 @@ function stopInactivityCheck() {
   inactivityCheck = null;
 }
 
+// ── P2P ID shortener ───────────────────────────────────
+function shortPeerId(peerId) {
+  // Hash peer ID to 8-char alphanumeric code
+  let hash = 0;
+  for (let i = 0; i < peerId.length; i++) {
+    hash = ((hash << 5) - hash) + peerId.charCodeAt(i);
+    hash = hash & hash; // Keep as 32-bit int
+  }
+  const chars = "ABCDEFGHJKMNPQRSTVWXYZ23456789"; // No 0,1,O,I,L to avoid confusion
+  let code = "";
+  hash = Math.abs(hash);
+  for (let i = 0; i < 8; i++) {
+    code += chars[hash % chars.length];
+    hash = Math.floor(hash / chars.length);
+  }
+  return code;
+}
+
 // ── P2P ────────────────────────────────────────────────
 function showP2PMenu() {
   document.getElementById("p2pModal").classList.add("active");
@@ -472,9 +492,12 @@ function createP2PGame() {
     ]
   });
   peer.on("open", id => {
+    myPeerId = id;
+    myGameCode = shortPeerId(id);
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pJoin").style.display = "block";
-    document.getElementById("gameCodeDisplay").value = id;
+    document.getElementById("gameCodeDisplay").value = myGameCode;
+    document.getElementById("gameCodeDisplay").title = "Full ID: " + id;
   });
   peer.on("connection", c => {
     conn = c;
@@ -497,51 +520,71 @@ function joinP2PGame(ev) {
   if (!code) { alert("Enter game code"); return; }
 
   const joinBtn = ev?.target || document.querySelector('#p2pInput button');
-  joinBtn.disabled = true;
-  joinBtn.textContent = "⟳ Connecting...";
+  let retries = 0;
+  const maxRetries = 3;
 
-  peer = new Peer({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun.services.mozilla.com:3478" }
-    ]
-  });
+  function attemptJoin() {
+    retries++;
+    joinBtn.disabled = true;
+    joinBtn.textContent = `⟳ Connecting... (${retries}/${maxRetries})`;
 
-  const timeout = setTimeout(() => {
-    if (peer && !peer.destroyed) {
-      peer.destroy();
-      joinBtn.disabled = false;
-      joinBtn.textContent = "Join Game";
-      alert("Connection timeout. Check code and try again.");
-    }
-  }, 15000);
+    peer = new Peer({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun.services.mozilla.com:3478" }
+      ]
+    });
 
-  peer.on("error", err => {
-    clearTimeout(timeout);
-    joinBtn.disabled = false;
-    joinBtn.textContent = "Join Game";
-    alert("Connection error: " + err.type);
-  });
+    const timeout = setTimeout(() => {
+      if (peer && !peer.destroyed) {
+        peer.destroy();
+        if (retries < maxRetries) {
+          setTimeout(attemptJoin, 1000 * retries); // Exponential backoff: 1s, 2s, 3s
+        } else {
+          joinBtn.disabled = false;
+          joinBtn.textContent = "Join Game";
+          alert("Connection failed after 3 attempts. Check code and try again.");
+        }
+      }
+    }, 15000);
 
-  peer.on("open", () => {
-    conn = peer.connect(code);
-    conn.on("open", () => {
+    peer.on("error", err => {
       clearTimeout(timeout);
-      closeP2PModal();
-      startP2PGame("red");
+      if (retries < maxRetries) {
+        setTimeout(attemptJoin, 1000 * retries);
+      } else {
+        joinBtn.disabled = false;
+        joinBtn.textContent = "Join Game";
+        alert("Connection error: " + err.type);
+      }
     });
-    conn.on("data", data => handleP2PMove(data));
-    conn.on("close", () => {
-      gameActive = false;
-      stopInactivityCheck();
-      updateStatus("Opponent disconnected");
+
+    peer.on("open", () => {
+      conn = peer.connect(code);
+      conn.on("open", () => {
+        clearTimeout(timeout);
+        closeP2PModal();
+        startP2PGame("red");
+      });
+      conn.on("data", data => handleP2PMove(data));
+      conn.on("close", () => {
+        gameActive = false;
+        stopInactivityCheck();
+        updateStatus("Opponent disconnected");
+      });
+      conn.on("error", () => {
+        if (retries < maxRetries) {
+          setTimeout(attemptJoin, 1000 * retries);
+        } else {
+          joinBtn.disabled = false;
+          joinBtn.textContent = "Join Game";
+          alert("Failed to connect. Check game code.");
+        }
+      });
     });
-    conn.on("error", () => {
-      joinBtn.disabled = false;
-      joinBtn.textContent = "Join Game";
-      alert("Failed to connect. Check game code.");
-    });
-  });
+  }
+
+  attemptJoin();
 }
 
 function startP2PGame(color) {
