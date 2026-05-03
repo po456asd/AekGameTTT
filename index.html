@@ -1908,9 +1908,11 @@ function doPCMove(move) {
     if (!hasValidMoves("red")) {
       if (!hasValidMoves("yellow")) {
         updateStatus("Draw! No valid moves for either player!");
+        winner = null;
       } else {
         playWin();
         updateStatus("No valid moves — YELLOW wins by default!");
+        winner = "yellow";
       }
       gameActive = false;
       saveGameReplay();
@@ -1927,11 +1929,14 @@ function pcNoMoves() {
   buildStocks();
   if (!hasValidMoves("yellow")) {
     updateStatus("Draw! No valid moves for either player!");
+    winner = null;
   } else {
     playWin();
     updateStatus("No valid moves — Red wins by default!");
+    winner = "red";
   }
   gameActive = false;
+  saveGameReplay();
 }
 
 // ── PC Easy ───────────────────────────────────────────
