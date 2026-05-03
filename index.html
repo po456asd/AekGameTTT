@@ -114,12 +114,13 @@ body {
 
 .header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
   margin-bottom: 16px;
+  gap: 8px;
 }
 
-h2 { margin: 0; flex: 1; font-size: clamp(14px, 4vw, 20px); }
+h2 { margin: 0; font-size: clamp(14px, 4vw, 20px); }
 
 .theme-toggle {
   padding: 6px 12px;
