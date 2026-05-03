@@ -1,7 +1,7 @@
 {
-  "tool_name": "mcp__Claude_Preview__preview_screenshot",
-  "tool_input_preview": "{\"serverId\":\"bf7eac0e-074d-4892-b390-bd55b0225261\"}",
-  "error": "preview_screenshot timed out after 30s. The preview window may be stuck (modal dialog, navigation hang, or unresponsive renderer). Check preview_console_logs for errors.",
-  "timestamp": "2026-05-03T15:37:23.791Z",
+  "tool_name": "mcp__Claude_Preview__preview_eval",
+  "tool_input_preview": "{\"serverId\":\"bf7eac0e-074d-4892-b390-bd55b0225261\",\"expression\":\"\\nmoveLog, winner, gameActive\\n\"}",
+  "error": "Eval failed: ReferenceError: winner is not defined\n    at <anonymous>:2:10",
+  "timestamp": "2026-05-03T15:38:29.100Z",
   "retry_count": 1
 }
