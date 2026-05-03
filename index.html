@@ -1830,9 +1830,14 @@ function dropLogic(color, size, cell) {
   if (hasValidMoves(next)) {
     nextTurn();
   } else {
-    playWin();
-    updateStatus("Draw! No valid moves for " + next + ".");
-    winner = "draw";
+    if (!hasValidMoves(current)) {
+      updateStatus("Draw! No valid moves for either player!");
+      winner = "draw";
+    } else {
+      playWin();
+      updateStatus("No valid moves — " + current + " wins by default!");
+      winner = current;
+    }
     gameActive = false;
     saveGameReplay();
   }
@@ -1974,9 +1979,15 @@ function doPCMove(move) {
 
     // Check if Red has valid moves
     if (!hasValidMoves("red")) {
-      playWin();
-      updateStatus("Draw! No valid moves for Red.");
-      winner = "draw";
+      if (!hasValidMoves("yellow")) {
+        playWin();
+        updateStatus("Draw! No valid moves for either player.");
+        winner = "draw";
+      } else {
+        playWin();
+        updateStatus("No valid moves — YELLOW wins by default!");
+        winner = "yellow";
+      }
       gameActive = false;
       saveGameReplay();
       return;
@@ -1990,9 +2001,14 @@ function pcNoMoves() {
   thinking = false;
   current = "red";
   buildStocks();
-  playWin();
-  updateStatus("Draw! No valid moves for Red.");
-  winner = "draw";
+  if (!hasValidMoves("yellow")) {
+    updateStatus("Draw! No valid moves for either player!");
+    winner = "draw";
+  } else {
+    playWin();
+    updateStatus("No valid moves — YELLOW wins by default!");
+    winner = "yellow";
+  }
   gameActive = false;
   saveGameReplay();
 }
