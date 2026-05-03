@@ -697,6 +697,7 @@ let pcDifficulty = "normal";
 // P2P sync tracking
 let pendingMoveId = null;
 let moveTimeout = null;
+let replayTimeout = null;
 let moveLog = [];
 let moveCount = 0;
 let winner = null;
@@ -824,6 +825,12 @@ function renderReplayMenuList() {
 function hideReplayMenu() {
   playClick();
   gameActive = false;
+
+  // Clear replay timeouts
+  if (replayTimeout) {
+    clearTimeout(replayTimeout);
+    replayTimeout = null;
+  }
 
   // Clear all animations
   document.querySelectorAll("[class*='fly'], [class*='place']").forEach(el => {
@@ -1499,6 +1506,9 @@ function replayGame(replayIndex) {
   if (replayIndex >= replays.length) return;
   const replay = replays[replayIndex];
 
+  // Clear any pending replay timeouts
+  if (replayTimeout) clearTimeout(replayTimeout);
+
   gameActive = true;
   mode = replay.mode;
   current = "red";
@@ -1529,6 +1539,7 @@ function replayGame(replayIndex) {
   function playNextMove() {
     if (moveIndex >= moveLog.length) {
       updateStatus(replay.finalWinner ? replay.finalWinner.toUpperCase() + " wins!" : "Game ended");
+      replayTimeout = null;
       return;
     }
 
@@ -1539,7 +1550,7 @@ function replayGame(replayIndex) {
     animateOpponentPieceFly(m.color, m.size, cells[m.r][m.c]);
 
     // Place piece after fly animation (600ms)
-    setTimeout(() => {
+    replayTimeout = setTimeout(() => {
       place(cells[m.r][m.c], m.color, m.size, true);
       stock[m.color][m.size]--;
       buildStocks();
@@ -1547,7 +1558,7 @@ function replayGame(replayIndex) {
       moveIndex++;
 
       // Wait for place animation (400ms) + extra delay before next move
-      setTimeout(playNextMove, 400);
+      replayTimeout = setTimeout(playNextMove, 400);
     }, 600);
   }
 
