@@ -1,7 +1,7 @@
 {
-  "tool_name": "mcp__Claude_in_Chrome__find",
-  "tool_input_preview": "{\"query\":\"first cell in top left of board\",\"tabId\":687018435}",
-  "error": "The accessibility tree does not contain any elements representing a game board or its cells. The tree shows UI controls for a \"Gobble Bingo 4x4\" game (buttons, headings for players, piece counts) but does not include the actual board grid or individual cell elements. The board cells are likely rendered as visual elements not exposed in this accessibility tree, or they may be in a canvas/SVG that isn't represented here.",
-  "timestamp": "2026-05-03T02:56:11.170Z",
+  "tool_name": "mcp__Claude_Preview__preview_screenshot",
+  "tool_input_preview": "{\"serverId\":\"bf7eac0e-074d-4892-b390-bd55b0225261\"}",
+  "error": "preview_screenshot timed out after 30s. The preview window may be stuck (modal dialog, navigation hang, or unresponsive renderer). Check preview_console_logs for errors.",
+  "timestamp": "2026-05-03T15:37:23.791Z",
   "retry_count": 1
 }

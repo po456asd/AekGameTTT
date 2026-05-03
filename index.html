@@ -853,6 +853,8 @@ function startGame(m) {
   thinking = false;
   gameActive = true;
   gameStartTime = Date.now();
+  moveLog = [];
+  winner = null;
 
   stock = {
     red:    { small: 8, large: 4 },
@@ -1908,6 +1910,7 @@ function doPCMove(move) {
     if (checkWin("yellow")) {
       playWin();
       updateStatus("YELLOW wins!");
+      winner = "yellow";
       gameActive = false;
       saveGameReplay();
       return;
