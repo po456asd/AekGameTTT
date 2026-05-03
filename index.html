@@ -81,8 +81,8 @@ initWebSocket();
   --cell-border: #555;
   --stock-border: #555;
   --stock-item-border: #444;
-  --glow-color-dim: rgba(255,255,255,0.3);
-  --glow-color-bright: rgba(255,255,255,0.8);
+  --glow-color-dim: rgba(255,255,255,0.15);
+  --glow-color-bright: rgba(255,255,255,0.35);
 }
 
 html.light {
@@ -328,8 +328,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 @keyframes boardBreathing {
-  0%, 100% { filter: drop-shadow(0 0 5px var(--glow-color-dim)) drop-shadow(0 0 0px transparent); }
-  50% { filter: drop-shadow(0 0 20px var(--glow-color-bright)) drop-shadow(0 0 0px transparent); }
+  0%, 100% { filter: drop-shadow(0 0 2px var(--glow-color-dim)); }
+  50% { filter: drop-shadow(0 0 8px var(--glow-color-bright)); }
 }
 
 @keyframes morphIn {
@@ -1116,17 +1116,17 @@ function replayGame(replayIndex) {
 
 // ── Board ──────────────────────────────────────────────
 function updateBoardGlow() {
-  let glowColorDim = "rgba(255,255,255,0.3)";
-  let glowColorBright = "rgba(255,255,255,0.8)";
+  let glowColorDim = "rgba(255,255,255,0.15)";
+  let glowColorBright = "rgba(255,255,255,0.35)";
   if (current === "Red") {
-    glowColorDim = "rgba(255,68,68,0.4)";
-    glowColorBright = "rgba(255,68,68,0.9)";
+    glowColorDim = "rgba(255,68,68,0.2)";
+    glowColorBright = "rgba(255,68,68,0.5)";
   } else if (current === "Blue") {
-    glowColorDim = "rgba(68,136,255,0.4)";
-    glowColorBright = "rgba(68,136,255,0.9)";
+    glowColorDim = "rgba(68,136,255,0.2)";
+    glowColorBright = "rgba(68,136,255,0.5)";
   } else if (current === "Yellow") {
-    glowColorDim = "rgba(255,221,51,0.4)";
-    glowColorBright = "rgba(255,221,51,0.9)";
+    glowColorDim = "rgba(255,221,51,0.2)";
+    glowColorBright = "rgba(255,221,51,0.5)";
   }
   document.documentElement.style.setProperty("--glow-color-dim", glowColorDim);
   document.documentElement.style.setProperty("--glow-color-bright", glowColorBright);
