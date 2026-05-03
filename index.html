@@ -1197,9 +1197,8 @@ function place(cell, color, size, animate = false) {
 
 function animateOpponentPieceFly(color, size, targetCell) {
   const stockEl = color === "yellow" ? document.getElementById("rightStock") : document.getElementById("leftStock");
-  const stockItems = stockEl.querySelectorAll(".stockItem");
-  const sizeBox = Array.from(stockItems).find(item => item.textContent.includes(size === "small" ? "×8" : "×4"));
-  const sourceRect = sizeBox ? sizeBox.getBoundingClientRect() : stockEl.getBoundingClientRect();
+  const sourcePieceEl = stockEl.querySelector(`.piece.${size}.${color}`);
+  const sourceRect = sourcePieceEl ? sourcePieceEl.getBoundingClientRect() : stockEl.getBoundingClientRect();
   const cellRect = targetCell.getBoundingClientRect();
 
   const flyPiece = document.createElement("div");
