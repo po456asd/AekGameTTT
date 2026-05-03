@@ -1702,8 +1702,9 @@ function animateOpponentPieceFly(color, size, targetCell) {
   flyPiece.style.pointerEvents = "none";
   document.body.appendChild(flyPiece);
 
-  const deltaX = cellRect.left - sourceRect.left;
-  const deltaY = cellRect.top - sourceRect.top;
+  // Calculate to cell center instead of top-left
+  const deltaX = cellRect.left - sourceRect.left + (cellRect.width - sourceRect.width) / 2;
+  const deltaY = cellRect.top - sourceRect.top + (cellRect.height - sourceRect.height) / 2;
 
   flyPiece.style.setProperty("--tx", deltaX + "px");
   flyPiece.style.setProperty("--ty", deltaY + "px");
