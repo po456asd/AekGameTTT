@@ -453,7 +453,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <body>
 
 <div class="header">
-  <h2>Gobble Bingo 4x4</h2>
+  <h2>Gobble Bingo 4x4<br></h2>
   <div style="display:flex;gap:8px;align-items:center;">
     <div id="musicPlayer" style="display:flex;gap:4px;align-items:center;padding:4px 8px;background:var(--cell-bg);border:1px solid var(--cell-border);border-radius:4px;">
       <button id="musicToggle" onclick="toggleMusic()" style="margin:0;padding:4px 8px;font-size:12px;" title="Play/Pause music">🎵</button>
@@ -639,6 +639,23 @@ function initMusic() {
   bgMusic.addEventListener("ended", () => {
     if (musicLooping) bgMusic.currentTime = 0;
   });
+
+  // Load saved music state
+  const savedMusicPlaying = localStorage.getItem("musicPlaying") === "true";
+  const savedMusicLooping = localStorage.getItem("musicLooping") === "true";
+
+  if (savedMusicLooping) {
+    musicLooping = true;
+    const btn = document.getElementById("loopToggle");
+    if (btn) btn.style.opacity = "1";
+  }
+
+  if (savedMusicPlaying) {
+    musicPlaying = true;
+    const btn = document.getElementById("musicToggle");
+    if (btn) btn.textContent = "⏸";
+    bgMusic.play().catch(() => {});
+  }
 }
 
 function toggleMusic() {
@@ -652,6 +669,7 @@ function toggleMusic() {
     musicPlaying = true;
     btn.textContent = "⏸";
   }
+  localStorage.setItem("musicPlaying", musicPlaying);
 }
 
 function setMusicVolume(value) {
@@ -662,6 +680,7 @@ function toggleLoop() {
   const btn = document.getElementById("loopToggle");
   musicLooping = !musicLooping;
   btn.style.opacity = musicLooping ? "1" : "0.5";
+  localStorage.setItem("musicLooping", musicLooping);
 }
 
 let mode = "pvp", current = "red", thinking = false;
