@@ -741,10 +741,18 @@ function shortPeerId() {
 
 function handleConnection(connection) {
   conn = connection;
+  console.log("Connection opened to:", connection.peer);
   connection.on("data", data => handleP2PMove(data));
   connection.on("error", err => {
+    console.log("Connection error:", err);
     gameActive = false;
     updateStatus("Connection error");
+  });
+  connection.on("close", () => {
+    console.log("Connection closed");
+    gameActive = false;
+    updateStatus("Opponent disconnected");
+    stopInactivityCheck();
   });
   startP2PGame("blue");
 }
@@ -753,14 +761,17 @@ function createP2PGame() {
   playClick();
   if (!peer) {
     const peerConfig = {
-      iceServers: [
-        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-        { urls: ["stun:stun.cloudflare.com:3478"] },
-        { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
-        { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
-      ]
+      config: {
+        iceServers: [
+          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+          { urls: ["stun:stun.cloudflare.com:3478"] },
+          { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+          { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+        ]
+      }
     };
     peer = new Peer(peerConfig);
+    console.log("Peer created, ID:", peer.id);
     peer.on("open", id => {
       roomId = shortPeerId();
       document.getElementById("p2pCreate").style.display = "none";
@@ -790,48 +801,65 @@ function joinP2PGame(ev) {
 
   if (!peer) {
     const peerConfig = {
-      iceServers: [
-        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-        { urls: ["stun:stun.cloudflare.com:3478"] },
-        { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
-        { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
-      ]
+      config: {
+        iceServers: [
+          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+          { urls: ["stun:stun.cloudflare.com:3478"] },
+          { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+          { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+        ]
+      }
     };
     peer = new Peer(peerConfig);
+    console.log("Peer created for joiner, ID:", peer.id);
   }
   roomId = code;
+  console.log("Attempting to connect to code:", code);
 
   // Retry logic
   let attempts = 0;
   const maxAttempts = 5;
   const tryConnect = () => {
-    try {
-      conn = peer.connect(code, { reliable: true });
-      conn.on("open", () => {
-        closeP2PModal();
-        startP2PGame("red");
-        joinBtn.disabled = false;
-        joinBtn.textContent = "Join Game";
-      });
-      conn.on("error", () => {
-        attempts++;
-        if (attempts < maxAttempts) setTimeout(tryConnect, 1000);
-        else {
+    attempts++;
+    console.log("Connection attempt", attempts, "of", maxAttempts);
+    conn = peer.connect(code, { reliable: true });
+
+    let attemptTimeout = setTimeout(() => {
+      if (!conn.open) {
+        console.log("Attempt", attempts, "timed out, closing connection");
+        conn.close();
+        if (attempts < maxAttempts) {
+          setTimeout(tryConnect, 1000);
+        } else {
           joinBtn.disabled = false;
           joinBtn.textContent = "Join Game";
           alert("Connection failed after " + maxAttempts + " attempts");
         }
-      });
-      conn.on("data", data => handleP2PMove(data));
-    } catch (err) {
-      attempts++;
-      if (attempts < maxAttempts) setTimeout(tryConnect, 1000);
-      else {
+      }
+    }, 5000);
+
+    conn.on("open", () => {
+      clearTimeout(attemptTimeout);
+      console.log("Connection opened on attempt", attempts);
+      closeP2PModal();
+      startP2PGame("red");
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join Game";
+    });
+
+    conn.on("error", (err) => {
+      clearTimeout(attemptTimeout);
+      console.log("Connection error on attempt", attempts, ":", err);
+      if (attempts < maxAttempts) {
+        setTimeout(tryConnect, 1000);
+      } else {
         joinBtn.disabled = false;
         joinBtn.textContent = "Join Game";
-        alert("Failed to join: " + err);
+        alert("Connection failed after " + maxAttempts + " attempts");
       }
-    }
+    });
+
+    conn.on("data", data => handleP2PMove(data));
   };
   tryConnect();
 
