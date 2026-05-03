@@ -1784,6 +1784,20 @@ function dropLogic(color, size, cell) {
   stock[color][size]--;
   buildStocks();
 
+  // Animate piece snap to center if dropped off-center
+  const pieceEl = cell.querySelector(".piece");
+  if (pieceEl) {
+    const cellRect = cell.getBoundingClientRect();
+    const pieceRect = pieceEl.getBoundingClientRect();
+    const deltaX = cellRect.left + cellRect.width / 2 - pieceRect.left - pieceRect.width / 2;
+    const deltaY = cellRect.top + cellRect.height / 2 - pieceRect.top - pieceRect.height / 2;
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      pieceEl.style.setProperty("--tx", deltaX + "px");
+      pieceEl.style.setProperty("--ty", deltaY + "px");
+      pieceEl.classList.add("place");
+    }
+  }
+
   // Record move to replay log (for all game modes)
   const moveId = Date.now();
   moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
