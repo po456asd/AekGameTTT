@@ -519,7 +519,9 @@ let gameActive = false;
 let p2pMode = false;
 let myColor = null;
 let pcDifficulty = "normal";
-let peer, conn;
+let peer = null;
+let conn = null;
+let roomId = null;
 
 // P2P sync tracking
 let pendingMoveId = null;
@@ -733,109 +735,96 @@ function showJoinInput() {
   document.getElementById("gameCodeInput").focus();
 }
 
+function shortPeerId() {
+  return peer.id.substring(0, 8).toUpperCase();
+}
+
+function handleConnection(connection) {
+  conn = connection;
+  connection.on("data", data => handleP2PMove(data));
+  connection.on("error", err => {
+    gameActive = false;
+    updateStatus("Connection error");
+  });
+  startP2PGame("blue");
+}
+
 function createP2PGame() {
   playClick();
-  peer = new Peer({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun.services.mozilla.com:3478" }
-    ]
-  });
-  peer.on("open", id => {
-    myPeerId = id;
-    myGameCode = shortPeerId(id);
+  if (!peer) {
+    peer = new Peer();
+    peer.on("open", id => {
+      roomId = shortPeerId();
+      document.getElementById("p2pCreate").style.display = "none";
+      document.getElementById("p2pJoin").style.display = "block";
+      document.getElementById("gameCodeDisplay").value = roomId;
+    });
+    peer.on("error", err => {
+      alert("P2P Error: " + err.type + " - " + err.message);
+    });
+    peer.on("connection", conn => handleConnection(conn));
+  } else {
+    roomId = shortPeerId();
     document.getElementById("p2pCreate").style.display = "none";
     document.getElementById("p2pJoin").style.display = "block";
-    document.getElementById("gameCodeDisplay").value = myGameCode;
-    document.getElementById("gameCodeDisplay").title = "Full ID: " + id;
-  });
-  peer.on("connection", c => {
-    conn = c;
-    conn.on("open", () => startP2PGame("blue"));
-    conn.on("data", data => handleP2PMove(data));
-    conn.on("close", () => {
-      gameActive = false;
-      stopInactivityCheck();
-      updateStatus("Opponent disconnected");
-    });
-  });
-  peer.on("error", err => {
-    alert("Host error: " + err.type);
-    closeP2PModal();
-  });
+    document.getElementById("gameCodeDisplay").value = roomId;
+  }
 }
 
 function joinP2PGame(ev) {
   playClick();
-  const code = document.getElementById("gameCodeInput").value.trim();
+  const code = document.getElementById("gameCodeInput").value.trim().toUpperCase();
   if (!code) { alert("Enter game code"); return; }
 
   const joinBtn = ev?.target || document.querySelector('#p2pInput button');
-  let retries = 0;
-  const maxRetries = 3;
+  joinBtn.disabled = true;
+  joinBtn.textContent = "⟳ Connecting...";
 
-  function attemptJoin() {
-    retries++;
-    joinBtn.disabled = true;
-    joinBtn.textContent = `⟳ Connecting... (${retries}/${maxRetries})`;
+  if (!peer) peer = new Peer({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] });
+  roomId = code;
 
-    peer = new Peer({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun.services.mozilla.com:3478" }
-      ]
-    });
-
-    const timeout = setTimeout(() => {
-      if (peer && !peer.destroyed) {
-        peer.destroy();
-        if (retries < maxRetries) {
-          setTimeout(attemptJoin, 1000 * retries); // Exponential backoff: 1s, 2s, 3s
-        } else {
-          joinBtn.disabled = false;
-          joinBtn.textContent = "Join Game";
-          alert("Connection failed after 3 attempts. Check code and try again.");
-        }
-      }
-    }, 15000);
-
-    peer.on("error", err => {
-      clearTimeout(timeout);
-      if (retries < maxRetries) {
-        setTimeout(attemptJoin, 1000 * retries);
-      } else {
-        joinBtn.disabled = false;
-        joinBtn.textContent = "Join Game";
-        alert("Connection error: " + err.type);
-      }
-    });
-
-    peer.on("open", () => {
-      conn = peer.connect(code);
+  // Retry logic
+  let attempts = 0;
+  const maxAttempts = 5;
+  const tryConnect = () => {
+    try {
+      conn = peer.connect(code, { reliable: true });
       conn.on("open", () => {
-        clearTimeout(timeout);
         closeP2PModal();
         startP2PGame("red");
-      });
-      conn.on("data", data => handleP2PMove(data));
-      conn.on("close", () => {
-        gameActive = false;
-        stopInactivityCheck();
-        updateStatus("Opponent disconnected");
+        joinBtn.disabled = false;
+        joinBtn.textContent = "Join Game";
       });
       conn.on("error", () => {
-        if (retries < maxRetries) {
-          setTimeout(attemptJoin, 1000 * retries);
-        } else {
+        attempts++;
+        if (attempts < maxAttempts) setTimeout(tryConnect, 1000);
+        else {
           joinBtn.disabled = false;
           joinBtn.textContent = "Join Game";
-          alert("Failed to connect. Check game code.");
+          alert("Connection failed after " + maxAttempts + " attempts");
         }
       });
-    });
-  }
+      conn.on("data", data => handleP2PMove(data));
+    } catch (err) {
+      attempts++;
+      if (attempts < maxAttempts) setTimeout(tryConnect, 1000);
+      else {
+        joinBtn.disabled = false;
+        joinBtn.textContent = "Join Game";
+        alert("Failed to join: " + err);
+      }
+    }
+  };
+  tryConnect();
 
-  attemptJoin();
+  // Timeout if no connection
+  setTimeout(() => {
+    if (!gameActive) {
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join Game";
+      alert("Connection timeout. Check game code and try again.");
+    }
+  }, 15000);
 }
 
 function startP2PGame(color) {
@@ -886,7 +875,7 @@ function startP2PGame(color) {
 }
 
 function handleP2PMove(data) {
-  lastMessageTime = Date.now(); // Update inactivity timer
+  lastMessageTime = Date.now();
   connectionStats.recvPackets++;
   if (data.type === "reset") { startP2PGame(myColor); return; }
   if (data.type === "ping") {
@@ -911,21 +900,18 @@ function handleP2PMove(data) {
   if (data.type === "verify") {
     const localHash = hashBoard();
     if (localHash !== data.hash) {
-      // Hash mismatch - request move log from opponent to resync
       conn.send({ type: "movelog_request", fromMove: data.moveCount });
     }
     return;
   }
 
   if (data.type === "movelog_request") {
-    // Send move log from requested point
     const moves = moveLog.slice(data.fromMove);
     conn.send({ type: "movelog_response", moves });
     return;
   }
 
   if (data.type === "movelog_response") {
-    // Replay moves to resync
     for (const m of data.moves) {
       playMove();
       place(cells[m.r][m.c], m.color, m.size);
@@ -936,8 +922,7 @@ function handleP2PMove(data) {
   }
 
   if (data.type === "move") {
-    // Regular move message
-    thinking = false; // Clear loading when opponent moves
+    thinking = false;
     const { r, c, size, color, id } = data;
     playMove();
     animateOpponentPieceFly(color, size, cells[r][c]);
@@ -1264,7 +1249,7 @@ function dropLogic(color, size, cell) {
     // Verify hash every 3 moves
     if (moveCount % 3 === 0) {
       const hash = hashBoard();
-      conn.send({ type: "verify", hash, moveCount });
+      if (conn) conn.send({ type: "verify", hash, moveCount });
     }
 
     current = current === "red" ? "blue" : "red";
