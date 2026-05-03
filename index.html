@@ -1689,9 +1689,9 @@ function createStock(box, color) {
       };
     }
 
-    // Touch drag
+    // Touch drag - only on piece, not text
     if (active) {
-      item.addEventListener("touchstart", e => {
+      p.addEventListener("touchstart", e => {
         e.preventDefault();
         touchDrag = { color, size: s };
         item.classList.add("lifting");
