@@ -812,9 +812,10 @@ function renderReplayMenuList() {
     const item = document.createElement("div");
     item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const modeStr = replay.mode === "pc" && replay.difficulty ? `pc(${replay.difficulty})` : replay.mode;
     const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
     const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
-    item.textContent = `${timestamp} | ${replay.mode} | ${status} | ${duration}`;
+    item.textContent = `${timestamp} | ${modeStr} | ${status} | ${duration}`;
     item.onclick = () => replayGame(idx);
     listEl.appendChild(item);
   });
@@ -1264,6 +1265,7 @@ function saveGameReplay() {
     timestamp: now.toLocaleString(),
     timestampISO: now.toISOString(),
     mode: mode,
+    difficulty: mode === "pc" ? pcDifficulty : null,
     finalWinner: winner,
     duration_seconds: duration
   };
@@ -1467,9 +1469,10 @@ function renderReplayList() {
     const item = document.createElement("div");
     item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const modeStr = replay.mode === "pc" && replay.difficulty ? `pc(${replay.difficulty})` : replay.mode;
     const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
     const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
-    item.textContent = `${timestamp} | ${replay.mode} | ${status} | ${duration}`;
+    item.textContent = `${timestamp} | ${modeStr} | ${status} | ${duration}`;
     item.onclick = () => {
       window.selectedReplayIdx = idx;
       document.querySelectorAll("#replayList div").forEach(el => el.style.background = "#222");
