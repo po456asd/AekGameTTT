@@ -789,8 +789,8 @@ function renderReplayMenuList() {
     const item = document.createElement("div");
     item.style.cssText = "padding:8px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#222; margin-bottom:2px; border-radius:2px; font-size:12px;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
-    const winner = replay.finalWinner ? replay.finalWinner.toUpperCase() : "?";
-    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${winner}</span><button onclick="replayGame(${idx}); hideReplayMenu();" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
+    const status = replay.finalWinner === "draw" ? "DRAW" : replay.finalWinner.toUpperCase();
+    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${status}</span><button onclick="replayGame(${idx}); hideReplayMenu();" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
     listEl.appendChild(item);
   });
 }
@@ -1426,9 +1426,9 @@ function renderReplayList() {
     const item = document.createElement("div");
     item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
-    const winner = replay.finalWinner || "?";
+    const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
     const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
-    item.textContent = `${timestamp} | ${replay.mode} | Winner: ${winner} | ${duration}`;
+    item.textContent = `${timestamp} | ${replay.mode} | ${status} | ${duration}`;
     item.onclick = () => {
       window.selectedReplayIdx = idx;
       document.querySelectorAll("#replayList div").forEach(el => el.style.background = "#222");
@@ -1908,7 +1908,7 @@ function doPCMove(move) {
     if (!hasValidMoves("red")) {
       if (!hasValidMoves("yellow")) {
         updateStatus("Draw! No valid moves for either player!");
-        winner = null;
+        winner = "draw";
       } else {
         playWin();
         updateStatus("No valid moves — YELLOW wins by default!");
