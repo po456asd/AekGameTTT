@@ -81,6 +81,8 @@ initWebSocket();
   --cell-border: #555;
   --stock-border: #555;
   --stock-item-border: #444;
+  --glow-color-dim: rgba(255,255,255,0.3);
+  --glow-color-bright: rgba(255,255,255,0.8);
 }
 
 html.light {
@@ -153,7 +155,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 #game { display: none; flex-direction: row; justify-content: center; gap: 12px; margin-top: 10px; align-items: center; }
 #status { margin: 8px 0; font-size: 15px; min-height: 20px; }
 
-#board { display: grid; gap: 5px; flex-shrink: 0; }
+#board {
+  display: grid;
+  gap: 5px;
+  flex-shrink: 0;
+  animation: boardBreathing 3s ease-in-out infinite;
+}
 
 .cell {
   width: 60px;
@@ -198,10 +205,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 6px;
   width: 100px;
   flex-shrink: 0;
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 0.3s ease, opacity 0.3s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
+  opacity: 0.4;
+}
+
+.stock.active {
+  opacity: 1;
 }
 
 .stock.active {
@@ -313,6 +325,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 @keyframes breathingGlow {
   0%, 100% { filter: drop-shadow(0 0 3px rgba(255,255,255,0.3)); }
   50% { filter: drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
+
+@keyframes boardBreathing {
+  0%, 100% { filter: drop-shadow(0 0 5px var(--glow-color-dim)) drop-shadow(0 0 0px transparent); }
+  50% { filter: drop-shadow(0 0 20px var(--glow-color-bright)) drop-shadow(0 0 0px transparent); }
 }
 
 @keyframes morphIn {
@@ -1098,6 +1115,23 @@ function replayGame(replayIndex) {
 }
 
 // ── Board ──────────────────────────────────────────────
+function updateBoardGlow() {
+  let glowColorDim = "rgba(255,255,255,0.3)";
+  let glowColorBright = "rgba(255,255,255,0.8)";
+  if (current === "Red") {
+    glowColorDim = "rgba(255,68,68,0.4)";
+    glowColorBright = "rgba(255,68,68,0.9)";
+  } else if (current === "Blue") {
+    glowColorDim = "rgba(68,136,255,0.4)";
+    glowColorBright = "rgba(68,136,255,0.9)";
+  } else if (current === "Yellow") {
+    glowColorDim = "rgba(255,221,51,0.4)";
+    glowColorBright = "rgba(255,221,51,0.9)";
+  }
+  document.documentElement.style.setProperty("--glow-color-dim", glowColorDim);
+  document.documentElement.style.setProperty("--glow-color-bright", glowColorBright);
+}
+
 function updateStatus(txt) {
   if (txt) {
     statusEl.innerHTML = txt;
@@ -1111,6 +1145,7 @@ function updateStatus(txt) {
         status += ` | Ping: ${latencyMs}`;
       }
       statusEl.textContent = status;
+      updateBoardGlow();
     }
   }
 }
