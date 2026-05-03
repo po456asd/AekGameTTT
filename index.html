@@ -489,6 +489,33 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <!-- Ghost piece for touch drag -->
 <div id="touchGhost"></div>
 
+<!-- Replay Manager -->
+<div id="replayManager" style="display:none; margin-top:15px; margin-left:12px; margin-right:12px; border:1px solid #555; padding:10px; border-radius:4px;">
+  <h3 style="margin:0 0 10px 0;">📼 Replays</h3>
+
+  <!-- List of past replays -->
+  <div id="replayList" style="max-height:180px; overflow-y:auto; margin-bottom:10px; border:1px solid #333; padding:5px; border-radius:3px;"></div>
+
+  <!-- Import file -->
+  <div style="margin-bottom:10px;">
+    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px;">
+    <button onclick="importReplayFromFile()" style="margin-left:5px;">📥 Import</button>
+  </div>
+
+  <!-- Export/Share buttons -->
+  <div id="replayActions" style="display:none; gap:5px; flex-wrap:wrap; margin-bottom:10px;">
+    <button onclick="downloadReplayFile(window.selectedReplayIdx)">⬇ Download</button>
+    <button onclick="copyReplayToClipboard(window.selectedReplayIdx)">📋 Copy JSON</button>
+    <button onclick="showShareLink(window.selectedReplayIdx)">🔗 Share Link</button>
+  </div>
+
+  <!-- Share link display -->
+  <div id="shareLinkBox" style="display:none; margin-top:8px;">
+    <input type="text" id="shareLink" readonly style="width:100%; padding:5px; font-size:12px; border:1px solid #555; border-radius:3px;">
+    <button onclick="copyShareLink()" style="width:100%; margin-top:5px;">Copy Link</button>
+  </div>
+</div>
+
 <div id="p2pModal" class="modal">
   <div class="modal-content">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -601,6 +628,7 @@ let mode = "pvp", current = "red", thinking = false;
 let cells = [], boardSize = 4;
 let stock;
 let gameActive = false;
+let gameStartTime = null;
 let p2pMode = false;
 let myColor = null;
 let pcDifficulty = "normal";
@@ -710,6 +738,7 @@ function startGame(m) {
   current = "red";
   thinking = false;
   gameActive = true;
+  gameStartTime = Date.now();
 
   stock = {
     red:    { small: 8, large: 4 },
@@ -1054,20 +1083,211 @@ function copyGameCode() {
 // ── Game Replay ────────────────────────────────────────
 function saveGameReplay() {
   if (moveLog.length === 0) return;
+  const now = new Date();
+  const duration = gameStartTime ? Math.round((now - gameStartTime) / 1000) : 0;
   const replay = {
+    version: 1,
     moves: moveLog,
-    timestamp: new Date().toLocaleString(),
+    timestamp: now.toLocaleString(),
+    timestampISO: now.toISOString(),
     mode: mode,
-    finalWinner: gameActive ? null : current
+    finalWinner: gameActive ? null : current,
+    duration_seconds: duration
   };
   const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
   replays.unshift(replay);
   replays.splice(10); // Keep only last 10 games
   localStorage.setItem("gameReplays", JSON.stringify(replays));
+
+  // Show replay manager
+  const managerEl = document.getElementById("replayManager");
+  if (managerEl) {
+    managerEl.style.display = "block";
+    renderReplayList();
+  }
 }
 
 function loadGameReplays() {
   return JSON.parse(localStorage.getItem("gameReplays") || "[]");
+}
+
+// ── Replay Export Functions ─────────────────────────────
+function exportReplayAsJSON(replayIndex) {
+  const replays = loadGameReplays();
+  if (!replays[replayIndex]) return null;
+  const replay = replays[replayIndex];
+  const exported = {
+    version: 1,
+    mode: replay.mode,
+    moves: replay.moves,
+    timestamp: replay.timestampISO || new Date(replay.timestamp).toISOString(),
+    finalWinner: replay.finalWinner || null,
+    duration_seconds: replay.duration_seconds || 0
+  };
+  return JSON.stringify(exported, null, 2);
+}
+
+function downloadReplayFile(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { alert("Replay not found"); return; }
+
+  const now = new Date();
+  const filename = `replay_${now.toISOString().split('T')[0]}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.json`;
+
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function copyReplayToClipboard(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { alert("Replay not found"); return; }
+
+  navigator.clipboard.writeText(jsonStr).then(() => {
+    alert("✓ Replay copied to clipboard!");
+  }).catch(err => {
+    console.error("Copy failed:", err);
+    alert("Failed to copy. Try downloading instead.");
+  });
+}
+
+function generateShareLink(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { alert("Replay not found"); return; }
+
+  try {
+    const encoded = btoa(jsonStr);
+    const url = window.location.href.split('#')[0] + `#replay=${encoded}`;
+    return url;
+  } catch (err) {
+    console.error("Encoding failed:", err);
+    alert("Replay too large to share as link (>2KB). Download as file instead.");
+    return null;
+  }
+}
+
+function showShareLink(replayIndex) {
+  const url = generateShareLink(replayIndex);
+  if (!url) return;
+
+  const linkEl = document.getElementById("shareLink");
+  const boxEl = document.getElementById("shareLinkBox");
+  if (linkEl && boxEl) {
+    linkEl.value = url;
+    boxEl.style.display = "block";
+  }
+}
+
+function copyShareLink() {
+  const linkEl = document.getElementById("shareLink");
+  if (!linkEl || !linkEl.value) return;
+
+  navigator.clipboard.writeText(linkEl.value).then(() => {
+    alert("✓ Link copied to clipboard!");
+  }).catch(err => {
+    console.error("Copy failed:", err);
+    alert("Failed to copy link");
+  });
+}
+
+function parseReplayFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target.result);
+        if (!json.moves || !Array.isArray(json.moves)) {
+          reject("Invalid replay file: missing moves array");
+          return;
+        }
+        if (!json.mode || !json.timestamp) {
+          reject("Invalid replay file: missing mode or timestamp");
+          return;
+        }
+        resolve(json);
+      } catch (err) {
+        reject("Failed to parse JSON: " + err.message);
+      }
+    };
+    reader.onerror = () => reject("Failed to read file");
+    reader.readAsText(file);
+  });
+}
+
+function importReplayFromFile() {
+  const fileInput = document.getElementById("replayFileInput");
+  if (!fileInput || !fileInput.files[0]) { alert("Select a file first"); return; }
+
+  const file = fileInput.files[0];
+  parseReplayFile(file).then(replay => {
+    const replays = loadGameReplays();
+    replays.unshift(replay);
+    replays.splice(50); // Keep last 50 imported replays
+    localStorage.setItem("gameReplays", JSON.stringify(replays));
+    alert("✓ Replay imported!");
+    fileInput.value = "";
+    renderReplayList();
+  }).catch(err => {
+    alert("❌ " + err);
+  });
+}
+
+function loadReplayFromURL() {
+  const hash = window.location.hash;
+  if (!hash.includes("#replay=")) return;
+
+  try {
+    const encoded = hash.split("#replay=")[1];
+    if (!encoded) return;
+
+    const jsonStr = atob(encoded);
+    const replay = JSON.parse(jsonStr);
+
+    if (!replay.moves || !Array.isArray(replay.moves)) {
+      console.error("Invalid replay in URL");
+      return;
+    }
+
+    const replays = loadGameReplays();
+    replays.unshift(replay);
+    replays.splice(50);
+    localStorage.setItem("gameReplays", JSON.stringify(replays));
+
+    alert("✓ Loaded replay from shared link!");
+    renderReplayList();
+  } catch (err) {
+    console.error("Failed to load replay from URL:", err);
+  }
+}
+
+function renderReplayList() {
+  const replays = loadGameReplays();
+  const listEl = document.getElementById("replayList");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  replays.forEach((replay, idx) => {
+    const item = document.createElement("div");
+    item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
+    const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const winner = replay.finalWinner || "?";
+    const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
+    item.textContent = `${timestamp} | ${replay.mode} | Winner: ${winner} | ${duration}`;
+    item.onclick = () => {
+      window.selectedReplayIdx = idx;
+      document.querySelectorAll("#replayList div").forEach(el => el.style.background = "#222");
+      item.style.background = "#333";
+      const actionsEl = document.getElementById("replayActions");
+      if (actionsEl) actionsEl.style.display = "flex";
+    };
+    listEl.appendChild(item);
+  });
 }
 
 function replayGame(replayIndex) {
@@ -1332,9 +1552,11 @@ function dropLogic(color, size, cell) {
   stock[color][size]--;
   buildStocks();
 
+  // Record move to replay log (for all game modes)
+  const moveId = Date.now();
+  moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
+
   if (p2pMode && dataChannel && dataChannel.readyState === 'open') {
-    const moveId = Date.now();
-    moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
     pendingMoveId = moveId;
     connectionStats.sentPackets++;
     dataChannel.send(JSON.stringify({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId }));
@@ -1794,6 +2016,9 @@ if (urlParams.has("join")) {
     setTimeout(() => document.querySelector('#p2pInput button').click(), 100);
   }, 500);
 }
+
+// Load replay from URL hash if present
+loadReplayFromURL();
 </script>
 
 </body>
