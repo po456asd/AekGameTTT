@@ -1392,21 +1392,23 @@ function findWinningMove(color) {
 function doPCMove(move) {
   playMove();
   animateOpponentPieceFly("yellow", move.size, move.cell);
-  setTimeout(() => place(move.cell, "yellow", move.size, true), 600);
   stock.yellow[move.size]--;
-  buildStocks();
+  setTimeout(() => {
+    place(move.cell, "yellow", move.size, true);
+    buildStocks();
 
-  if (checkWin("yellow")) {
-    playWin();
-    updateStatus("YELLOW wins!");
-    gameActive = false;
-    return;
-  }
+    if (checkWin("yellow")) {
+      playWin();
+      updateStatus("YELLOW wins!");
+      gameActive = false;
+      return;
+    }
 
-  current = "red";
-  thinking = false;
-  buildStocks();
-  updateStatus();
+    current = "red";
+    thinking = false;
+    buildStocks();
+    updateStatus();
+  }, 600);
 }
 
 function pcNoMoves() {
