@@ -228,6 +228,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.9)); }
 }
 
+@keyframes piece-fly {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(1); }
+}
+
 @keyframes liftStock {
   0% { transform: translateY(0) scale(1); }
   100% { transform: translateY(-8px) scale(1.05); }
@@ -935,7 +940,8 @@ function handleP2PMove(data) {
     thinking = false; // Clear loading when opponent moves
     const { r, c, size, color, id } = data;
     playMove();
-    place(cells[r][c], color, size, true); // Animate opponent's move
+    animateOpponentPieceFly(color, size, cells[r][c]);
+    setTimeout(() => place(cells[r][c], color, size, true), 600);
     stock[color][size]--;
     moveLog.push(data);
     moveCount++;
@@ -1189,6 +1195,32 @@ function place(cell, color, size, animate = false) {
   }
 }
 
+function animateOpponentPieceFly(color, size, targetCell) {
+  const stockEl = color === "yellow" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  const stockItems = stockEl.querySelectorAll(".stockItem");
+  const sizeBox = Array.from(stockItems).find(item => item.textContent.includes(size === "small" ? "×8" : "×4"));
+  const sourceRect = sizeBox ? sizeBox.getBoundingClientRect() : stockEl.getBoundingClientRect();
+  const cellRect = targetCell.getBoundingClientRect();
+
+  const flyPiece = document.createElement("div");
+  flyPiece.className = `piece ${size} ${color}`;
+  flyPiece.style.position = "fixed";
+  flyPiece.style.left = sourceRect.left + "px";
+  flyPiece.style.top = sourceRect.top + "px";
+  flyPiece.style.zIndex = "9999";
+  flyPiece.style.pointerEvents = "none";
+  document.body.appendChild(flyPiece);
+
+  const deltaX = cellRect.left - sourceRect.left;
+  const deltaY = cellRect.top - sourceRect.top;
+
+  flyPiece.style.setProperty("--tx", deltaX + "px");
+  flyPiece.style.setProperty("--ty", deltaY + "px");
+  flyPiece.style.animation = "piece-fly 0.6s ease-in-out forwards";
+
+  setTimeout(() => flyPiece.remove(), 600);
+}
+
 // Shared drop logic used by both mouse drop and touch drop
 function dropLogic(color, size, cell) {
   thinking = false; // Clear loading on first move
@@ -1360,7 +1392,8 @@ function findWinningMove(color) {
 
 function doPCMove(move) {
   playMove();
-  place(move.cell, "yellow", move.size, true); // Animate PC move
+  animateOpponentPieceFly("yellow", move.size, move.cell);
+  setTimeout(() => place(move.cell, "yellow", move.size, true), 600);
   stock.yellow[move.size]--;
   buildStocks();
 
