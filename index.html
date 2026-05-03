@@ -461,6 +461,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button onclick="startGame('pvp')">👥 PvP Local</button>
   <button onclick="showDifficultyMenu()">🤖 Vs PC</button>
   <button onclick="showP2PMenu()">🌐 Online P2P</button>
+  <button onclick="showReplayMenu()" style="margin-top:10px;">📼 Replays</button>
+</div>
+
+<div id="replayMenu" style="display:none;">
+  <h3 style="margin:0 0 15px 0;">📼 Load Replay</h3>
+
+  <!-- Import file -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Import from file:</p>
+    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px;">
+    <button onclick="importReplayFromFile()" style="margin-left:5px; display:block; margin-top:5px;">📥 Import</button>
+  </div>
+
+  <!-- Paste share link -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Or paste share link:</p>
+    <textarea id="replayPasteInput" placeholder="Paste replay link or JSON here" style="width:100%; height:60px; padding:5px; font-family:monospace; font-size:12px; border:1px solid #555; border-radius:3px; background:var(--cell-bg); color:var(--text);"></textarea>
+    <button onclick="loadReplayFromInput()" style="width:100%; margin-top:5px;">Load Replay</button>
+  </div>
+
+  <button onclick="hideReplayMenu()" style="width:100%;">↩ Back</button>
 </div>
 
 <div id="difficultyMenu">
@@ -722,6 +743,59 @@ function hideDifficultyMenu() {
   menu.classList.remove("morph");
   void menu.offsetWidth;
   menu.classList.add("morph");
+}
+
+function showReplayMenu() {
+  playClick();
+  document.getElementById("menu").style.display = "none";
+  const rMenu = document.getElementById("replayMenu");
+  rMenu.style.display = "block";
+  rMenu.classList.remove("morph");
+  void rMenu.offsetWidth;
+  rMenu.classList.add("morph");
+}
+
+function hideReplayMenu() {
+  playClick();
+  document.getElementById("replayMenu").style.display = "none";
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
+}
+
+function loadReplayFromInput() {
+  const input = document.getElementById("replayPasteInput").value.trim();
+  if (!input) {
+    alert("Paste a replay link or JSON");
+    return;
+  }
+
+  // Check if it's a URL hash
+  if (input.includes("#replay=")) {
+    const hashIdx = input.indexOf("#replay=");
+    window.location.hash = input.substring(hashIdx);
+    return;
+  }
+
+  // Try parsing as JSON
+  try {
+    const replay = JSON.parse(input);
+    if (replay.moves && Array.isArray(replay.moves)) {
+      // Save to replays and load
+      const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
+      replays.unshift(replay);
+      localStorage.setItem("gameReplays", JSON.stringify(replays));
+      hideReplayMenu();
+      // Show game and load replay viewer
+      // For now, just confirm
+      alert("Replay loaded! Play a game to start, then check Replays after.");
+      return;
+    }
+  } catch(e) {}
+
+  alert("Invalid replay format. Use a share link or JSON text.");
 }
 
 function startPCGame(diff) {
