@@ -790,7 +790,7 @@ function renderReplayMenuList() {
     item.style.cssText = "padding:8px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#222; margin-bottom:2px; border-radius:2px; font-size:12px;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
     const status = replay.finalWinner === "draw" ? "DRAW" : replay.finalWinner.toUpperCase();
-    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${status}</span><button onclick="replayGame(${idx}); hideReplayMenu();" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
+    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${status}</span><button onclick="replayGame(${idx});" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
     listEl.appendChild(item);
   });
 }
@@ -1458,6 +1458,10 @@ function replayGame(replayIndex) {
   };
 
   document.getElementById("menu").style.display = "none";
+  const replayMenuEl = document.getElementById("replayMenu");
+  if (replayMenuEl) replayMenuEl.style.display = "none";
+  const replayManagerEl = document.getElementById("replayManager");
+  if (replayManagerEl) replayManagerEl.style.display = "none";
   document.getElementById("game").style.display = "flex";
   document.getElementById("resetBtn").style.display = "inline-block";
   document.getElementById("menuBtn").style.display = "inline-block";
