@@ -752,7 +752,15 @@ function handleConnection(connection) {
 function createP2PGame() {
   playClick();
   if (!peer) {
-    peer = new Peer();
+    const peerConfig = {
+      iceServers: [
+        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+        { urls: ["stun:stun.cloudflare.com:3478"] },
+        { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+        { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+      ]
+    };
+    peer = new Peer(peerConfig);
     peer.on("open", id => {
       roomId = shortPeerId();
       document.getElementById("p2pCreate").style.display = "none";
@@ -780,7 +788,17 @@ function joinP2PGame(ev) {
   joinBtn.disabled = true;
   joinBtn.textContent = "⟳ Connecting...";
 
-  if (!peer) peer = new Peer({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }] });
+  if (!peer) {
+    const peerConfig = {
+      iceServers: [
+        { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+        { urls: ["stun:stun.cloudflare.com:3478"] },
+        { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+        { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+      ]
+    };
+    peer = new Peer(peerConfig);
+  }
   roomId = code;
 
   // Retry logic
