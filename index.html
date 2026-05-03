@@ -810,10 +810,12 @@ function renderReplayMenuList() {
 
   replays.forEach((replay, idx) => {
     const item = document.createElement("div");
-    item.style.cssText = "padding:8px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#222; margin-bottom:2px; border-radius:2px; font-size:12px;";
+    item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
     const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
-    const status = replay.finalWinner === "draw" ? "DRAW" : replay.finalWinner.toUpperCase();
-    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${status}</span><button onclick="replayGame(${idx});" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
+    const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
+    const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
+    item.textContent = `${timestamp} | ${replay.mode} | ${status} | ${duration}`;
+    item.onclick = () => replayGame(idx);
     listEl.appendChild(item);
   });
 }
