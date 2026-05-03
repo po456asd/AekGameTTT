@@ -438,6 +438,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .diff-desc { font-size: 9px; }
   .modal-content { width: 98%; padding: 12px; }
 }
+
+@keyframes slideIn {
+  from { transform: translateX(400px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(400px); opacity: 0; }
+}
 </style>
 </head>
 <body>
@@ -467,11 +477,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <div id="replayMenu" style="display:none;">
   <h3 style="margin:0 0 15px 0;">📼 Load Replay</h3>
 
+  <!-- Saved replays list -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Saved Replays:</p>
+    <div id="replayMenuList" style="max-height:150px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:3px; margin-bottom:8px; background:var(--cell-bg);"></div>
+  </div>
+
   <!-- Import file -->
   <div style="margin-bottom:15px;">
     <p style="margin:0 0 5px 0;">Import from file:</p>
-    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px;">
-    <button onclick="importReplayFromFile()" style="margin-left:5px; display:block; margin-top:5px;">📥 Import</button>
+    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px; width:100%; margin-bottom:5px;">
+    <button onclick="importReplayFromFile()" style="width:100%;">📥 Import</button>
   </div>
 
   <!-- Paste share link -->
@@ -490,7 +506,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button onclick="startPCGame('normal')">🤔 Normal</button>
   <button onclick="startPCGame('hell')">😈 Hell</button>
   <button onclick="startPCGame('demon')">👿 DEMON</button>
-  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: unbeatable</div>
+  <button onclick="startPCGame('demon2')">💀 DEMON 2</button>
+  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: minimax · DEMON 2: MCTS</div>
   <button onclick="hideDifficultyMenu()">↩ Back</button>
 </div>
 
@@ -525,6 +542,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   <!-- Export/Share buttons -->
   <div id="replayActions" style="display:none; gap:5px; flex-wrap:wrap; margin-bottom:10px;">
+    <button onclick="replayGame(window.selectedReplayIdx); document.getElementById('replayManager').style.display='none';" style="background:#4a9eff; flex:1; min-width:120px;">▶ Play Replay</button>
     <button onclick="downloadReplayFile(window.selectedReplayIdx)">⬇ Download</button>
     <button onclick="copyReplayToClipboard(window.selectedReplayIdx)">📋 Copy JSON</button>
     <button onclick="showShareLink(window.selectedReplayIdx)">🔗 Share Link</button>
@@ -753,6 +771,28 @@ function showReplayMenu() {
   rMenu.classList.remove("morph");
   void rMenu.offsetWidth;
   rMenu.classList.add("morph");
+  renderReplayMenuList();
+}
+
+function renderReplayMenuList() {
+  const replays = loadGameReplays();
+  const listEl = document.getElementById("replayMenuList");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  if (replays.length === 0) {
+    listEl.innerHTML = "<div style='padding:8px; text-align:center; opacity:0.6;'>No saved replays</div>";
+    return;
+  }
+
+  replays.forEach((replay, idx) => {
+    const item = document.createElement("div");
+    item.style.cssText = "padding:8px; border-bottom:1px solid #444; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#222; margin-bottom:2px; border-radius:2px; font-size:12px;";
+    const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const winner = replay.finalWinner ? replay.finalWinner.toUpperCase() : "?";
+    item.innerHTML = `<span>${timestamp} | ${replay.mode} | ${winner}</span><button onclick="replayGame(${idx}); hideReplayMenu();" style="padding:4px 8px; font-size:11px; margin-left:8px; background:#4a9eff; border:none; border-radius:2px; cursor:pointer;">Play</button>`;
+    listEl.appendChild(item);
+  });
 }
 
 function hideReplayMenu() {
@@ -768,7 +808,7 @@ function hideReplayMenu() {
 function loadReplayFromInput() {
   const input = document.getElementById("replayPasteInput").value.trim();
   if (!input) {
-    alert("Paste a replay link or JSON");
+    showToast("❌ Paste a replay link or JSON");
     return;
   }
 
@@ -787,15 +827,15 @@ function loadReplayFromInput() {
       const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
       replays.unshift(replay);
       localStorage.setItem("gameReplays", JSON.stringify(replays));
+      showToast("✓ Replay loaded! Playing...");
       hideReplayMenu();
-      // Show game and load replay viewer
-      // For now, just confirm
-      alert("Replay loaded! Play a game to start, then check Replays after.");
+      document.getElementById("replayPasteInput").value = "";
+      replayGame(0); // Auto-play the loaded replay
       return;
     }
   } catch(e) {}
 
-  alert("Invalid replay format. Use a share link or JSON text.");
+  showToast("❌ Invalid replay format. Use a share link or JSON text.");
 }
 
 function startPCGame(diff) {
@@ -975,7 +1015,7 @@ function setupDataChannel() {
 function joinP2PGame(ev) {
   playClick();
   const code = document.getElementById("gameCodeInput").value.trim().toUpperCase();
-  if (!code) { alert("Enter game code"); return; }
+  if (!code) { showToast("❌ Enter game code"); return; }
 
   const joinBtn = ev?.target || document.querySelector('#p2pInput button');
   joinBtn.disabled = true;
@@ -1006,7 +1046,7 @@ function joinP2PGame(ev) {
     if (!gameActive) {
       joinBtn.disabled = false;
       joinBtn.textContent = "Join Game";
-      alert("Connection timeout. Check game code and try again.");
+      showToast("❌ Connection timeout. Check game code and try again.");
     }
   }, 10000);
 
@@ -1151,7 +1191,31 @@ function copyGameCode() {
   playClick();
   const code = document.getElementById("gameCodeDisplay").value;
   navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
-  alert("Game link copied!");
+  showToast("✓ Game link copied!");
+}
+
+// ── Toast Notifications ────────────────────────────────
+function showToast(message, duration = 3000) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #333;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 4px;
+    border-left: 4px solid #4a9eff;
+    font-size: 14px;
+    z-index: 10000;
+    animation: slideIn 0.3s ease-in-out;
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-in-out forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 // ── Game Replay ────────────────────────────────────────
@@ -1173,11 +1237,20 @@ function saveGameReplay() {
   replays.splice(10); // Keep only last 10 games
   localStorage.setItem("gameReplays", JSON.stringify(replays));
 
-  // Show replay manager
+  // Show replay manager with quick actions for latest replay
   const managerEl = document.getElementById("replayManager");
   if (managerEl) {
     managerEl.style.display = "block";
     renderReplayList();
+
+    // Auto-select latest replay (index 0) and show actions
+    window.selectedReplayIdx = 0;
+    const listItems = document.querySelectorAll("#replayList div");
+    if (listItems.length > 0) {
+      listItems[0].style.background = "#333";
+    }
+    const actionsEl = document.getElementById("replayActions");
+    if (actionsEl) actionsEl.style.display = "flex";
   }
 }
 
@@ -1203,7 +1276,7 @@ function exportReplayAsJSON(replayIndex) {
 
 function downloadReplayFile(replayIndex) {
   const jsonStr = exportReplayAsJSON(replayIndex);
-  if (!jsonStr) { alert("Replay not found"); return; }
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
 
   const now = new Date();
   const filename = `replay_${now.toISOString().split('T')[0]}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.json`;
@@ -1221,19 +1294,19 @@ function downloadReplayFile(replayIndex) {
 
 function copyReplayToClipboard(replayIndex) {
   const jsonStr = exportReplayAsJSON(replayIndex);
-  if (!jsonStr) { alert("Replay not found"); return; }
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
 
   navigator.clipboard.writeText(jsonStr).then(() => {
-    alert("✓ Replay copied to clipboard!");
+    showToast("✓ Replay copied to clipboard!");
   }).catch(err => {
     console.error("Copy failed:", err);
-    alert("Failed to copy. Try downloading instead.");
+    showToast("❌ Failed to copy. Try downloading instead.");
   });
 }
 
 function generateShareLink(replayIndex) {
   const jsonStr = exportReplayAsJSON(replayIndex);
-  if (!jsonStr) { alert("Replay not found"); return; }
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
 
   try {
     const encoded = btoa(jsonStr);
@@ -1241,7 +1314,7 @@ function generateShareLink(replayIndex) {
     return url;
   } catch (err) {
     console.error("Encoding failed:", err);
-    alert("Replay too large to share as link (>2KB). Download as file instead.");
+    showToast("❌ Replay too large to share as link (>2KB). Download as file instead.");
     return null;
   }
 }
@@ -1263,10 +1336,10 @@ function copyShareLink() {
   if (!linkEl || !linkEl.value) return;
 
   navigator.clipboard.writeText(linkEl.value).then(() => {
-    alert("✓ Link copied to clipboard!");
+    showToast("✓ Link copied to clipboard!");
   }).catch(err => {
     console.error("Copy failed:", err);
-    alert("Failed to copy link");
+    showToast("❌ Failed to copy link");
   });
 }
 
@@ -1296,7 +1369,7 @@ function parseReplayFile(file) {
 
 function importReplayFromFile() {
   const fileInput = document.getElementById("replayFileInput");
-  if (!fileInput || !fileInput.files[0]) { alert("Select a file first"); return; }
+  if (!fileInput || !fileInput.files[0]) { showToast("❌ Select a file first"); return; }
 
   const file = fileInput.files[0];
   parseReplayFile(file).then(replay => {
@@ -1304,11 +1377,12 @@ function importReplayFromFile() {
     replays.unshift(replay);
     replays.splice(50); // Keep last 50 imported replays
     localStorage.setItem("gameReplays", JSON.stringify(replays));
-    alert("✓ Replay imported!");
+    showToast("✓ Replay imported! Playing...");
     fileInput.value = "";
-    renderReplayList();
+    hideReplayMenu();
+    replayGame(0); // Auto-play the imported replay (index 0 since we unshift'd it)
   }).catch(err => {
-    alert("❌ " + err);
+    showToast("❌ " + err);
   });
 }
 
@@ -1333,8 +1407,10 @@ function loadReplayFromURL() {
     replays.splice(50);
     localStorage.setItem("gameReplays", JSON.stringify(replays));
 
-    alert("✓ Loaded replay from shared link!");
-    renderReplayList();
+    showToast("✓ Loaded replay from shared link! Playing...");
+    // Hide menu and auto-play
+    document.getElementById("menu").style.display = "none";
+    replayGame(0);
   } catch (err) {
     console.error("Failed to load replay from URL:", err);
   }
@@ -1391,21 +1467,33 @@ function replayGame(replayIndex) {
   updateStatus(`Replaying Game | Step 0/${moveLog.length}`);
 
   let moveIndex = 0;
-  const replayInterval = setInterval(() => {
+
+  function playNextMove() {
     if (moveIndex >= moveLog.length) {
-      clearInterval(replayInterval);
       updateStatus(replay.finalWinner ? replay.finalWinner.toUpperCase() + " wins!" : "Game ended");
       return;
     }
 
     const m = moveLog[moveIndex];
-    place(cells[m.r][m.c], m.color, m.size);
-    stock[m.color][m.size]--;
-    current = current === "red" ? "blue" : "red";
-    buildStocks();
-    updateStatus(`Replaying Game | Step ${moveIndex + 1}/${moveLog.length}`);
-    moveIndex++;
-  }, 500);
+    playMove();
+
+    // Animate piece flying from stock
+    animateOpponentPieceFly(m.color, m.size, cells[m.r][m.c]);
+
+    // Place piece after fly animation (600ms)
+    setTimeout(() => {
+      place(cells[m.r][m.c], m.color, m.size, true);
+      stock[m.color][m.size]--;
+      buildStocks();
+      updateStatus(`Replaying Game | Step ${moveIndex + 1}/${moveLog.length}`);
+      moveIndex++;
+
+      // Wait for place animation (400ms) + extra delay before next move
+      setTimeout(playNextMove, 400);
+    }, 600);
+  }
+
+  playNextMove();
 }
 
 // ── Board ──────────────────────────────────────────────
@@ -1768,7 +1856,8 @@ function getWinLines() {
   return lines;
 }
 
-function findWinningMove(color) {
+function findWinningMove(color, preferLarge = false) {
+  const moves = [];
   for (let r = 0; r < boardSize; r++)
     for (let c = 0; c < boardSize; c++)
       for (const s of ["small", "large"]) {
@@ -1778,15 +1867,27 @@ function findWinningMove(color) {
         cells[r][c].piece = { color, size: s };
         const win = checkWin(color);
         cells[r][c].piece = backup;
-        if (win) return { cell: cells[r][c], size: s };
+        if (win) moves.push({ cell: cells[r][c], size: s });
       }
-  return null;
+
+  if (!moves.length) return null;
+
+  if (preferLarge) {
+    const large = moves.find(m => m.size === "large");
+    return large || moves[0];
+  }
+  return moves[0];
 }
 
 function doPCMove(move) {
   playMove();
   animateOpponentPieceFly("yellow", move.size, move.cell);
   stock.yellow[move.size]--;
+
+  // Record move to replay log
+  const moveId = Date.now();
+  moveLog.push({ r: move.cell.row, c: move.cell.col, size: move.size, color: "yellow", id: moveId, ts: moveId });
+
   setTimeout(() => {
     place(move.cell, "yellow", move.size, true);
     buildStocks();
@@ -1795,12 +1896,27 @@ function doPCMove(move) {
       playWin();
       updateStatus("YELLOW wins!");
       gameActive = false;
+      saveGameReplay();
       return;
     }
 
     current = "red";
     thinking = false;
     buildStocks();
+
+    // Check if Red has valid moves
+    if (!hasValidMoves("red")) {
+      if (!hasValidMoves("yellow")) {
+        updateStatus("Draw! No valid moves for either player!");
+      } else {
+        playWin();
+        updateStatus("No valid moves — YELLOW wins by default!");
+      }
+      gameActive = false;
+      saveGameReplay();
+      return;
+    }
+
     updateStatus();
   }, 600);
 }
@@ -1823,6 +1939,7 @@ function pcMove() {
   if (pcDifficulty === "easy")   pcMoveEasy();
   else if (pcDifficulty === "hell") pcMoveHell();
   else if (pcDifficulty === "demon") pcMoveDemon();
+  else if (pcDifficulty === "demon2") pcMoveDemon2();
   else pcMoveNormal();
 }
 
@@ -2064,6 +2181,153 @@ function pcMoveDemon() {
 
 function minimax(move, depth, isMaximizing, alpha = -Infinity, beta = Infinity) {
   return minimaxDemon(move, depth, !isMaximizing, alpha, beta);
+}
+
+// ── PC DEMON 2 (Sampling-based evaluation) ──────
+function countThreats(color) {
+  let count = 0;
+  for (const line of getWinLines()) {
+    let colorCount = 0, blockCount = 0;
+    for (const [lr, lc] of line) {
+      if (cells[lr][lc].piece?.color === color) colorCount++;
+      else if (cells[lr][lc].piece) blockCount++;
+    }
+    if (blockCount === 0 && colorCount >= 2) count++;
+  }
+  return count;
+}
+
+function evalMoveDemon2(move, samples = 40) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  const sS = stock["yellow"].small, sL = stock["yellow"].large;
+
+  cells[r][c].piece = { color: "yellow", size: move.size };
+  stock["yellow"][move.size]--;
+
+  // Heuristic score: position value + threat creation
+  let score = 0;
+  score += POS_SCORE[r][c]; // Position value
+  score += countThreats("yellow") * 5; // Bonus for creating threats
+
+  // Penalty for covering own pieces
+  const hadSmall = backup && backup.size === "small" && backup.color === "yellow";
+  if (hadSmall && move.size === "large") score -= 10;
+
+  // Sample wins
+  let wins = 0;
+  for (let i = 0; i < samples; i++) {
+    const sim_stock = JSON.parse(JSON.stringify(stock));
+    const sim_board = [];
+    for (let sr = 0; sr < boardSize; sr++) {
+      sim_board[sr] = [];
+      for (let sc = 0; sc < boardSize; sc++) {
+        sim_board[sr][sc] = cells[sr][sc].piece ? {...cells[sr][sc].piece} : null;
+      }
+    }
+
+    let sim_color = "red";
+    for (let d = 0; d < 12; d++) {
+      const sim_moves = [];
+      for (let sr = 0; sr < boardSize; sr++) {
+        for (let sc = 0; sc < boardSize; sc++) {
+          for (const s of ["small", "large"]) {
+            if (sim_stock[sim_color]?.[s] <= 0) continue;
+            if (!canPlace(cells[sr][sc], s)) continue;
+            sim_moves.push({ r: sr, c: sc, size: s });
+          }
+        }
+      }
+      if (sim_moves.length === 0) break;
+      const m = sim_moves[Math.floor(Math.random() * sim_moves.length)];
+      sim_board[m.r][m.c] = { color: sim_color, size: m.size };
+      sim_stock[sim_color][m.size]--;
+      if (sim_color === "yellow") wins++;
+      sim_color = sim_color === "yellow" ? "red" : "yellow";
+    }
+  }
+
+  cells[r][c].piece = backup;
+  stock["yellow"].small = sS;
+  stock["yellow"].large = sL;
+  return score + (wins / samples) * 10;
+}
+
+function findForkMove(color) {
+  for (const m of getAllMoves(color)) {
+    const r = m.cell.row, c = m.cell.col;
+    const backup = cells[r][c].piece;
+    cells[r][c].piece = { color, size: m.size };
+
+    let winCount = 0;
+    for (const nm of getAllMoves(color)) {
+      const r2 = nm.cell.row, c2 = nm.cell.col;
+      const backup2 = cells[r2][c2].piece;
+      cells[r2][c2].piece = { color, size: nm.size };
+      if (checkWin(color)) winCount++;
+      cells[r2][c2].piece = backup2;
+      if (winCount >= 2) break;
+    }
+
+    cells[r][c].piece = backup;
+    if (winCount >= 2) return m;
+  }
+  return null;
+}
+
+function countCreatedThreats(color, move) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  cells[r][c].piece = { color, size: move.size };
+
+  let threats = 0;
+  for (const line of getWinLines()) {
+    let count = 0, empty = 0;
+    for (const [lr, lc] of line) {
+      const p = cells[lr][lc].piece;
+      if (p?.color === color) count++;
+      else if (!p) empty++;
+    }
+    if (count >= 2 && empty > 0) threats++;
+  }
+
+  cells[r][c].piece = backup;
+  return threats;
+}
+
+function evalMoveStrength(move, color) {
+  let strength = POS_SCORE[move.cell.row][move.cell.col];
+  strength += countCreatedThreats(color, move) * 8;
+  if (move.size === "large") strength += 5;
+  return strength;
+}
+
+function pcMoveDemon2() {
+  let move = findWinningMove("yellow");
+  if (move) { doPCMove(move); return; }
+
+  move = findWinningMove("red", true);
+  if (move) { doPCMove(move); return; }
+
+  // Look for fork (multiple winning threats)
+  move = findForkMove("yellow");
+  if (move) { doPCMove(move); return; }
+
+  const moves = getAllMoves("yellow");
+  if (!moves.length) { pcNoMoves(); return; }
+
+  // Sort by threat strength — evaluate high-threat moves first
+  const movesWithStrength = moves.map(m => ({ move: m, strength: evalMoveStrength(m, "yellow") }));
+  movesWithStrength.sort((a, b) => b.strength - a.strength);
+
+  let best = null, bestScore = -1;
+  const startTime = Date.now();
+  for (const { move: m } of movesWithStrength) {
+    if (Date.now() - startTime > 3500) break;
+    const score = evalMoveDemon2(m, 50);
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  doPCMove(best || moves[0]);
 }
 
 // ── Init ───────────────────────────────────────────────
