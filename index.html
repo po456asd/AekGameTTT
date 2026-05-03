@@ -1835,7 +1835,7 @@ function dropLogic(color, size, cell) {
       winner = "draw";
     } else {
       playWin();
-      updateStatus("No valid moves — " + current + " wins by default!");
+      updateStatus(next + " blocked! No valid moves — " + current + " wins!");
       winner = current;
     }
     gameActive = false;
@@ -1985,7 +1985,7 @@ function doPCMove(move) {
         winner = "draw";
       } else {
         playWin();
-        updateStatus("No valid moves — YELLOW wins by default!");
+        updateStatus("RED blocked! No valid moves — YELLOW wins!");
         winner = "yellow";
       }
       gameActive = false;
