@@ -5,7 +5,14 @@
       "Bash(git push *)",
       "Bash(git add *)",
       "Bash(git commit -m 'Add autoplay to music player and fix audio source URL *)",
-      "Bash(git commit -m 'Add opponent piece fly animation from size box to board *)"
+      "Bash(git commit -m 'Add opponent piece fly animation from size box to board *)",
+      "Bash(git commit -m ' *)",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "mcp__Claude_in_Chrome__tabs_create_mcp",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -4,7 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Gobble Bingo 4x4</title>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+// WebRTC + Signaling setup
+let ws = null;
+let peerConnection = null;
+let dataChannel = null;
+let roomId = null;
+let isInitiator = false;
+
+function initWebSocket() {
+  ws = new WebSocket('ws://localhost:8001');
+  ws.onopen = () => console.log('Connected to signaling server');
+  ws.onmessage = (event) => handleSignalingMessage(JSON.parse(event.data));
+  ws.onerror = (err) => console.error('WebSocket error:', err);
+  ws.onclose = () => console.log('Disconnected from signaling server');
+}
+
+function createPeerConnection() {
+  peerConnection = new RTCPeerConnection({
+    iceServers: [
+      { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+      { urls: ["stun:stun.cloudflare.com:3478"] },
+      { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+      { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+    ]
+  });
+
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
+    }
+  };
+
+  peerConnection.onconnectionstatechange = () => {
+    console.log('Connection state:', peerConnection.connectionState);
+  };
+}
+
+async function handleSignalingMessage(msg) {
+  try {
+    if (msg.type === 'peer-joined') {
+      if (isInitiator) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: 'offer', offer }));
+      }
+    }
+    else if (msg.type === 'offer') {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: 'answer', answer }));
+    }
+    else if (msg.type === 'answer') {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
+    }
+    else if (msg.type === 'ice-candidate' && msg.candidate) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      } catch (err) {
+        console.error('ICE candidate error:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Signaling error:', err);
+  }
+}
+
+initWebSocket();
+</script>
 <style>
 :root {
   --bg: #111;
@@ -519,9 +587,6 @@ let gameActive = false;
 let p2pMode = false;
 let myColor = null;
 let pcDifficulty = "normal";
-let peer = null;
-let conn = null;
-let roomId = null;
 
 // P2P sync tracking
 let pendingMoveId = null;
@@ -651,9 +716,9 @@ function backToMenu() {
   touchDrag = null;
   ghostEl.style.display = "none";
   stopInactivityCheck();
-  if (peer) peer.destroy();
-  if (conn) conn.close();
-  peer = conn = null;
+  if (dataChannel) dataChannel.close();
+  if (peerConnection) peerConnection.close();
+  dataChannel = peerConnection = null;
 
   document.getElementById("game").style.display = "none";
   document.getElementById("resetBtn").style.display = "none";
@@ -669,8 +734,8 @@ function backToMenu() {
 
 function resetGame() {
   playClick();
-  if (p2pMode && conn) {
-    conn.send({ type: "reset" });
+  if (p2pMode && dataChannel && dataChannel.readyState === 'open') {
+    dataChannel.send(JSON.stringify({ type: "reset" }));
     startP2PGame(myColor);
   } else {
     startGame(mode);
@@ -681,9 +746,9 @@ function startInactivityCheck() {
   if (inactivityCheck) clearInterval(inactivityCheck);
   lastMessageTime = Date.now();
   inactivityCheck = setInterval(() => {
-    if (!p2pMode || !conn || !gameActive) return;
+    if (!p2pMode || !dataChannel || !gameActive) return;
     if (Date.now() - lastMessageTime > 15000) {
-      conn.close();
+      if (dataChannel) dataChannel.close();
       gameActive = false;
       updateStatus("Opponent timeout — no response for 15s");
       if (inactivityCheck) clearInterval(inactivityCheck);
@@ -735,59 +800,55 @@ function showJoinInput() {
   document.getElementById("gameCodeInput").focus();
 }
 
-function shortPeerId() {
-  return peer.id.substring(0, 8).toUpperCase();
+function createP2PGame() {
+  playClick();
+  if (!peerConnection) {
+    createPeerConnection();
+  }
+
+  // Generate random room ID
+  roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
+  isInitiator = true;
+
+  // Create data channel as initiator
+  dataChannel = peerConnection.createDataChannel('game');
+  setupDataChannel();
+
+  console.log("Created P2P game, room:", roomId);
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'join', roomId }));
+  }
+
+  document.getElementById("p2pCreate").style.display = "none";
+  document.getElementById("p2pJoin").style.display = "block";
+  document.getElementById("gameCodeDisplay").value = roomId;
 }
 
-function handleConnection(connection) {
-  conn = connection;
-  console.log("Connection opened to:", connection.peer);
-  connection.on("data", data => handleP2PMove(data));
-  connection.on("error", err => {
-    console.log("Connection error:", err);
+function setupDataChannel() {
+  if (!dataChannel) return;
+
+  dataChannel.onopen = () => {
+    console.log("Data channel opened");
+    startP2PGame("red");
+  };
+
+  dataChannel.onmessage = (event) => {
+    handleP2PMove(JSON.parse(event.data));
+  };
+
+  dataChannel.onerror = (err) => {
+    console.error("Data channel error:", err);
     gameActive = false;
     updateStatus("Connection error");
-  });
-  connection.on("close", () => {
-    console.log("Connection closed");
+  };
+
+  dataChannel.onclose = () => {
+    console.log("Data channel closed");
     gameActive = false;
     updateStatus("Opponent disconnected");
     stopInactivityCheck();
-  });
-  startP2PGame("blue");
-}
-
-function createP2PGame() {
-  playClick();
-  if (!peer) {
-    const peerConfig = {
-      config: {
-        iceServers: [
-          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-          { urls: ["stun:stun.cloudflare.com:3478"] },
-          { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
-          { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
-        ]
-      }
-    };
-    peer = new Peer(peerConfig);
-    console.log("Peer created, ID:", peer.id);
-    peer.on("open", id => {
-      roomId = shortPeerId();
-      document.getElementById("p2pCreate").style.display = "none";
-      document.getElementById("p2pJoin").style.display = "block";
-      document.getElementById("gameCodeDisplay").value = roomId;
-    });
-    peer.on("error", err => {
-      alert("P2P Error: " + err.type + " - " + err.message);
-    });
-    peer.on("connection", conn => handleConnection(conn));
-  } else {
-    roomId = shortPeerId();
-    document.getElementById("p2pCreate").style.display = "none";
-    document.getElementById("p2pJoin").style.display = "block";
-    document.getElementById("gameCodeDisplay").value = roomId;
-  }
+  };
 }
 
 function joinP2PGame(ev) {
@@ -799,78 +860,40 @@ function joinP2PGame(ev) {
   joinBtn.disabled = true;
   joinBtn.textContent = "⟳ Connecting...";
 
-  if (!peer) {
-    const peerConfig = {
-      config: {
-        iceServers: [
-          { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-          { urls: ["stun:stun.cloudflare.com:3478"] },
-          { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
-          { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
-        ]
-      }
-    };
-    peer = new Peer(peerConfig);
-    console.log("Peer created for joiner, ID:", peer.id);
+  if (!peerConnection) {
+    createPeerConnection();
   }
+
   roomId = code;
-  console.log("Attempting to connect to code:", code);
+  isInitiator = false;
+  console.log("Joining room:", roomId);
 
-  // Retry logic
-  let attempts = 0;
-  const maxAttempts = 5;
-  const tryConnect = () => {
-    attempts++;
-    console.log("Connection attempt", attempts, "of", maxAttempts);
-    conn = peer.connect(code, { reliable: true });
-
-    let attemptTimeout = setTimeout(() => {
-      if (!conn.open) {
-        console.log("Attempt", attempts, "timed out, closing connection");
-        conn.close();
-        if (attempts < maxAttempts) {
-          setTimeout(tryConnect, 1000);
-        } else {
-          joinBtn.disabled = false;
-          joinBtn.textContent = "Join Game";
-          alert("Connection failed after " + maxAttempts + " attempts");
-        }
-      }
-    }, 5000);
-
-    conn.on("open", () => {
-      clearTimeout(attemptTimeout);
-      console.log("Connection opened on attempt", attempts);
-      closeP2PModal();
-      startP2PGame("red");
-      joinBtn.disabled = false;
-      joinBtn.textContent = "Join Game";
-    });
-
-    conn.on("error", (err) => {
-      clearTimeout(attemptTimeout);
-      console.log("Connection error on attempt", attempts, ":", err);
-      if (attempts < maxAttempts) {
-        setTimeout(tryConnect, 1000);
-      } else {
-        joinBtn.disabled = false;
-        joinBtn.textContent = "Join Game";
-        alert("Connection failed after " + maxAttempts + " attempts");
-      }
-    });
-
-    conn.on("data", data => handleP2PMove(data));
+  // Setup data channel listener as joiner
+  peerConnection.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    console.log("Data channel received");
+    setupDataChannel();
   };
-  tryConnect();
 
-  // Timeout if no connection
-  setTimeout(() => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'join', roomId }));
+  }
+
+  // Timeout after 10 seconds
+  const timeout = setTimeout(() => {
     if (!gameActive) {
       joinBtn.disabled = false;
       joinBtn.textContent = "Join Game";
       alert("Connection timeout. Check game code and try again.");
     }
-  }, 15000);
+  }, 10000);
+
+  // Clear timeout once connected
+  const origSetLocalDesc = peerConnection.setLocalDescription.bind(peerConnection);
+  peerConnection.setLocalDescription = function(desc) {
+    clearTimeout(timeout);
+    return origSetLocalDesc(desc);
+  };
 }
 
 function startP2PGame(color) {
@@ -906,9 +929,9 @@ function startP2PGame(color) {
   // Start keep-alive heartbeat with latency measurement
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   heartbeatInterval = setInterval(() => {
-    if (conn && gameActive) {
+    if (dataChannel && dataChannel.readyState === 'open' && gameActive) {
       connectionStats.lastPingTime = Date.now();
-      conn.send({ type: "ping", ts: connectionStats.lastPingTime });
+      dataChannel.send(JSON.stringify({ type: "ping", ts: connectionStats.lastPingTime }));
       if (pingTimeout) clearTimeout(pingTimeout);
       pingTimeout = setTimeout(() => {
         connectionStats.latency = 9999; // Timeout indicator
@@ -925,7 +948,7 @@ function handleP2PMove(data) {
   connectionStats.recvPackets++;
   if (data.type === "reset") { startP2PGame(myColor); return; }
   if (data.type === "ping") {
-    if (conn) conn.send({ type: "pong", ts: data.ts });
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "pong", ts: data.ts }));
     return;
   }
   if (data.type === "pong") {
@@ -946,14 +969,14 @@ function handleP2PMove(data) {
   if (data.type === "verify") {
     const localHash = hashBoard();
     if (localHash !== data.hash) {
-      conn.send({ type: "movelog_request", fromMove: data.moveCount });
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "movelog_request", fromMove: data.moveCount }));
     }
     return;
   }
 
   if (data.type === "movelog_request") {
     const moves = moveLog.slice(data.fromMove);
-    conn.send({ type: "movelog_response", moves });
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "movelog_response", moves }));
     return;
   }
 
@@ -978,12 +1001,12 @@ function handleP2PMove(data) {
     moveCount++;
 
     // Send ACK
-    if (conn) conn.send({ type: "ack", id });
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "ack", id }));
 
     // Verify hash every 3 moves
     if (moveCount % 3 === 0) {
       const hash = hashBoard();
-      conn.send({ type: "verify", hash, moveCount });
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "verify", hash, moveCount }));
     }
 
     if (checkWin(color)) {
@@ -1265,18 +1288,18 @@ function dropLogic(color, size, cell) {
   stock[color][size]--;
   buildStocks();
 
-  if (p2pMode && conn) {
+  if (p2pMode && dataChannel && dataChannel.readyState === 'open') {
     const moveId = Date.now();
     moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
     pendingMoveId = moveId;
     connectionStats.sentPackets++;
-    conn.send({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId });
+    dataChannel.send(JSON.stringify({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId }));
 
     // Wait for ACK, timeout after 5s = resend
     if (moveTimeout) clearTimeout(moveTimeout);
     moveTimeout = setTimeout(() => {
-      if (pendingMoveId === moveId) {
-        conn.send({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId });
+      if (pendingMoveId === moveId && dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(JSON.stringify({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId }));
       }
     }, 5000);
   }
@@ -1295,7 +1318,7 @@ function dropLogic(color, size, cell) {
     // Verify hash every 3 moves
     if (moveCount % 3 === 0) {
       const hash = hashBoard();
-      if (conn) conn.send({ type: "verify", hash, moveCount });
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "verify", hash, moveCount }));
     }
 
     current = current === "red" ? "blue" : "red";

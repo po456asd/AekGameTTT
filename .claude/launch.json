@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8000"],
       "port": 8000
+    },
+    {
+      "name": "signaling-server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["signaling-server.js"],
+      "port": 8001
     }
   ]
 }

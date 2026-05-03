@@ -32,14 +32,14 @@
   "hotPaths": [
     {
       "path": "index.html",
-      "accessCount": 309,
-      "lastAccessed": 1777773714246,
+      "accessCount": 343,
+      "lastAccessed": 1777776365259,
       "type": "file"
     },
     {
       "path": ".claude\\launch.json",
-      "accessCount": 1,
-      "lastAccessed": 1777738468785,
+      "accessCount": 4,
+      "lastAccessed": 1777776048141,
       "type": "file"
     },
     {
@@ -47,6 +47,12 @@
       "accessCount": 1,
       "lastAccessed": 1777741530044,
       "type": "directory"
+    },
+    {
+      "path": "signaling-server.js",
+      "accessCount": 1,
+      "lastAccessed": 1777776035464,
+      "type": "file"
     }
   ],
   "userDirectives": []
