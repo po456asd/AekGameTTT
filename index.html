@@ -880,6 +880,14 @@ function backToMenu() {
   if (peerConnection) peerConnection.close();
   dataChannel = peerConnection = null;
 
+  // Clear all animations
+  document.querySelectorAll("[class*='fly'], [class*='place']").forEach(el => {
+    el.classList.remove("fly", "place");
+    el.style.animation = "none";
+    el.style.opacity = "";
+    el.style.transform = "";
+  });
+
   document.getElementById("game").style.display = "none";
   document.getElementById("resetBtn").style.display = "none";
   document.getElementById("menuBtn").style.display = "none";
