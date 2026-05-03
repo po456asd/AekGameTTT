@@ -809,6 +809,7 @@ function createP2PGame() {
   // Generate random room ID
   roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
   isInitiator = true;
+  myColor = "red";
 
   // Create data channel as initiator
   dataChannel = peerConnection.createDataChannel('game');
@@ -830,7 +831,7 @@ function setupDataChannel() {
 
   dataChannel.onopen = () => {
     console.log("Data channel opened");
-    startP2PGame("red");
+    startP2PGame(myColor);
   };
 
   dataChannel.onmessage = (event) => {
@@ -866,6 +867,7 @@ function joinP2PGame(ev) {
 
   roomId = code;
   isInitiator = false;
+  myColor = "blue";
   console.log("Joining room:", roomId);
 
   // Setup data channel listener as joiner
