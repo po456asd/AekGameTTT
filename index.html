@@ -1229,7 +1229,7 @@ function saveGameReplay() {
     timestamp: now.toLocaleString(),
     timestampISO: now.toISOString(),
     mode: mode,
-    finalWinner: gameActive ? null : current,
+    finalWinner: winner,
     duration_seconds: duration
   };
   const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
