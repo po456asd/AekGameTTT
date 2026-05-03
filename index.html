@@ -1252,7 +1252,14 @@ function place(cell, color, size, animate = false) {
 }
 
 function animateOpponentPieceFly(color, size, targetCell) {
-  const stockEl = color === "yellow" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  let stockEl;
+  if (p2pMode) {
+    // In P2P: myColor determines which side I'm on, opponent is on the other side
+    stockEl = myColor === "red" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  } else {
+    // In PvP/PvPC: color determines stock location
+    stockEl = color === "yellow" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  }
   const sourcePieceEl = stockEl.querySelector(`.piece.${size}.${color}`);
   const sourceRect = sourcePieceEl ? sourcePieceEl.getBoundingClientRect() : stockEl.getBoundingClientRect();
   const cellRect = targetCell.getBoundingClientRect();
