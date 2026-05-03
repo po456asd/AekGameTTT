@@ -538,6 +538,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <div style="margin-bottom:10px;">
     <input type="file" id="replayFileInput" accept=".json" style="font-size:12px;">
     <button onclick="importReplayFromFile()" style="margin-left:5px;">📥 Import</button>
+    <button onclick="wipeAllReplays()" style="margin-left:5px; background:#c44;">🗑 Wipe</button>
   </div>
 
   <!-- Export/Share buttons -->
@@ -1394,6 +1395,12 @@ function importReplayFromFile() {
   }).catch(err => {
     showToast("❌ " + err);
   });
+}
+
+function wipeAllReplays() {
+  localStorage.removeItem("gameReplays");
+  showToast("✓ All replays cleared!");
+  renderReplayList();
 }
 
 function loadReplayFromURL() {
