@@ -469,6 +469,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 @keyframes fillBar {
   to { width: 100%; }
 }
+
+.stock {
+  position: relative;
+  overflow: hidden;
+}
+
+.stock-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4488ff, #ffdd33, #ff4444);
+  width: 0%;
+  z-index: 1;
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
@@ -713,6 +730,8 @@ let gameStartTime = null;
 let p2pMode = false;
 let myColor = null;
 let pcDifficulty = "normal";
+let thinkingStartTime = null;
+let thinkingProgressInterval = null;
 
 // P2P sync tracking
 let pendingMoveId = null;
@@ -1621,6 +1640,38 @@ function updateStatus(txt) {
   }
 }
 
+function startThinkingProgress() {
+  thinkingStartTime = Date.now();
+  const rightStock = document.getElementById("rightStock");
+
+  // Create progress bar if not exists
+  let progressBar = rightStock.querySelector(".stock-progress");
+  if (!progressBar) {
+    progressBar = document.createElement("div");
+    progressBar.className = "stock-progress";
+    rightStock.insertBefore(progressBar, rightStock.firstChild);
+  }
+
+  // Start update loop
+  if (thinkingProgressInterval) clearInterval(thinkingProgressInterval);
+  thinkingProgressInterval = setInterval(() => {
+    const elapsed = Date.now() - thinkingStartTime;
+    const percent = Math.min((elapsed / TIME_LIMIT) * 100, 100);
+    const bar = rightStock.querySelector(".stock-progress");
+    if (bar) bar.style.width = percent + "%";
+  }, 50);
+}
+
+function stopThinkingProgress() {
+  if (thinkingProgressInterval) {
+    clearInterval(thinkingProgressInterval);
+    thinkingProgressInterval = null;
+  }
+  const rightStock = document.getElementById("rightStock");
+  const progressBar = rightStock.querySelector(".stock-progress");
+  if (progressBar) progressBar.remove();
+}
+
 function buildBoard() {
   boardEl.innerHTML = "";
   cells = [];
@@ -1926,6 +1977,7 @@ function nextTurn() {
     current = "yellow";
     thinking = true;
     buildStocks();
+    startThinkingProgress();
     const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
     updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}]`);
     setTimeout(pcMove, 600);
@@ -2009,6 +2061,7 @@ function doPCMove(move) {
 
     current = "red";
     thinking = false;
+    stopThinkingProgress();
     buildStocks();
 
     // Check if Red has valid moves
@@ -2033,6 +2086,7 @@ function doPCMove(move) {
 
 function pcNoMoves() {
   thinking = false;
+  stopThinkingProgress();
   current = "red";
   buildStocks();
   if (!hasValidMoves("yellow")) {
