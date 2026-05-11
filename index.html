@@ -1933,7 +1933,7 @@ function startCountdown() {
   countdownInterval = setInterval(() => {
     const elapsed = Date.now() - thinkingStartTime;
     const remaining = Math.max(0, (TIME_LIMIT - elapsed) / 1000).toFixed(1);
-    updateStatus(`<span class="loading"></span> Thinking... [${diffLabel}] ${remaining}s`);
+    updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}] ${remaining}s`);
   }, 100);
 }
 
@@ -1949,12 +1949,8 @@ function nextTurn() {
     current = "yellow";
     thinking = true;
     buildStocks();
-    const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
-    updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}]`);
-    setTimeout(() => {
-      startCountdown();
-      pcMove();
-    }, 600);
+    startCountdown();
+    setTimeout(pcMove, 600);
   } else {
     current = current === "red" ? "blue" : "red";
     buildStocks();
