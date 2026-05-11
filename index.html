@@ -2152,6 +2152,19 @@ function evalMoveStrength(move, color) {
   return strength;
 }
 
+// ── Demon2 Perfect AI Constants ────────────────────
+const MAX_DEPTH = 10;
+const WIN_SCORE = 1000;
+const LOSS_SCORE = -1000;
+const DRAW_SCORE = 0;
+const TIME_LIMIT = 5000; // milliseconds
+const POSITION_SCORE = [
+  [3, 2, 2, 3],
+  [2, 4, 4, 2],
+  [2, 4, 4, 2],
+  [3, 2, 2, 3]
+];
+
 function pcMoveDemon2() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
