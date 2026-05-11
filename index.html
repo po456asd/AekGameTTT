@@ -2380,6 +2380,12 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
   // 5. Alpha-beta loop
   let bestScore = isMax ? -Infinity : Infinity;
   for (const move of orderedMoves) {
+    // Check time limit before exploring move
+    if (Date.now() - startTime > TIME_LIMIT) {
+      tt[hash] = { score: bestScore, depth };
+      return bestScore;
+    }
+
     const r = move.cell.row, c = move.cell.col;
     const backup = board[r][c].piece;
     const backupStock = JSON.parse(JSON.stringify(stock));
