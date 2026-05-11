@@ -2330,6 +2330,53 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt) {
   return bestScore;
 }
 
+function iterativeDeepen(board, stock, aiColor) {
+  const moves = getAllMoves(aiColor);
+  if (!moves.length) {
+    pcNoMoves();
+    return null;
+  }
+
+  let bestMove = moves[0];
+  let bestScore = -Infinity;
+  const tt = {}; // Transposition table for this search
+  const startTime = Date.now();
+
+  for (let depth = 1; depth <= MAX_DEPTH; depth++) {
+    if (Date.now() - startTime > TIME_LIMIT) break;
+
+    let depthBest = null;
+    let depthBestScore = -Infinity;
+
+    for (const move of moves) {
+      const r = move.cell.row, c = move.cell.col;
+      const backup = board[r][c].piece;
+      const backupStock = JSON.parse(JSON.stringify(stock));
+
+      board[r][c].piece = { color: aiColor, size: move.size };
+      stock[aiColor][move.size]--;
+
+      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt);
+
+      board[r][c].piece = backup;
+      stock[aiColor].small = backupStock[aiColor].small;
+      stock[aiColor].large = backupStock[aiColor].large;
+
+      if (score > depthBestScore) {
+        depthBestScore = score;
+        depthBest = move;
+      }
+    }
+
+    if (depthBestScore > bestScore) {
+      bestScore = depthBestScore;
+      bestMove = depthBest;
+    }
+  }
+
+  return bestMove;
+}
+
 function pcMoveDemon2() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
