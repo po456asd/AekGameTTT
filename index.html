@@ -2446,7 +2446,7 @@ function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
   });
 }
 
-function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime) {
+function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime, killerMoves) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
 
   // 0. Check time limit (stop search if exceeded)
@@ -2483,7 +2483,7 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
   // 4. Generate and order moves
   const moves = isMax ? aiMoves : opMoves;
   const color = isMax ? aiColor : opColor;
-  const orderedMoves = moveOrder(moves, board, stock, color);
+  const orderedMoves = moveOrder(moves, board, stock, color, depth, killerMoves);
 
   // 5. Alpha-beta loop
   let bestScore = isMax ? -Infinity : Infinity;
@@ -2501,7 +2501,7 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
     board[r][c].piece = { color, size: move.size };
     stock[color][move.size]--;
 
-    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt, startTime);
+    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt, startTime, killerMoves);
 
     board[r][c].piece = backup;
     stock[color].small = backupStock[color].small;
@@ -2515,7 +2515,13 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
       beta = Math.min(beta, bestScore);
     }
 
-    if (beta <= alpha) break; // Prune
+    if (beta <= alpha) {
+      // Store killer move for this depth
+      if (!killerMoves[depth]) killerMoves[depth] = [];
+      killerMoves[depth].unshift(move); // add to front
+      if (killerMoves[depth].length > 2) killerMoves[depth].pop(); // keep only 2
+      break;
+    }
   }
 
   // 6. Store in transposition table
