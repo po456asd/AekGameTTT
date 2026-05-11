@@ -2227,16 +2227,28 @@ const POSITION_SCORE = [
   [3, 2, 2, 3]
 ];
 
-function boardHash(board, stock) {
-  let hash = "";
+function zobristHash(board, stock) {
+  let hash = 0;
+
+  // XOR all pieces
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 4; c++) {
       const piece = board[r][c].piece;
-      if (!piece) hash += ".";
-      else hash += piece.color[0].toUpperCase() + piece.size[0];
+      if (piece) {
+        const cellIndex = r * 4 + c; // 0-15
+        const colorNum = colorToNum(piece.color); // 0-2
+        const sizeNum = piece.size === "large" ? 1 : 0;
+        const typeIndex = colorNum * 2 + sizeNum; // 0-5
+        const tableIndex = cellIndex * 4 + typeIndex; // 0-63
+        hash ^= zobristTable.pieces[tableIndex];
+      }
     }
   }
-  hash += "|" + stock.yellow.small + "," + stock.yellow.large + "," + stock.red.small + "," + stock.red.large;
+
+  // XOR stock state
+  hash ^= zobristTable.stock[stock.yellow.small + stock.yellow.large * 16];
+  hash ^= zobristTable.stock[256 + stock.red.small + stock.red.large * 16];
+
   return hash;
 }
 
@@ -2427,7 +2439,7 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
   }
 
   // 1. Check transposition table
-  const hash = boardHash(board, stock);
+  const hash = zobristHash(board, stock);
   if (tt[hash] && tt[hash].depth >= depth) {
     return tt[hash].score;
   }
