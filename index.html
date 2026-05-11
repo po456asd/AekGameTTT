@@ -2327,7 +2327,7 @@ function moveEquals(move1, move2) {
          move1.size === move2.size;
 }
 
-function moveOrder(moves, board, stock, aiColor) {
+function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
 
   return moves.sort((a, b) => {
@@ -2431,7 +2431,17 @@ function moveOrder(moves, board, stock, aiColor) {
 
     if (aBlocks !== bBlocks) return bBlocks - aBlocks;
 
-    // Priority 3: Center positions
+    // Priority 4: Killer moves (depth-aware heuristic)
+    if (depth && killerMoves && killerMoves[depth]) {
+      let aIsKiller = false, bIsKiller = false;
+      for (const killer of killerMoves[depth]) {
+        if (moveEquals(a, killer)) aIsKiller = true;
+        if (moveEquals(b, killer)) bIsKiller = true;
+      }
+      if (aIsKiller !== bIsKiller) return bIsKiller ? 1 : -1;
+    }
+
+    // Priority 5: Center positions
     return POSITION_SCORE[bRow][bCol] - POSITION_SCORE[aRow][aCol];
   });
 }
