@@ -2302,6 +2302,47 @@ function detectThreats(board, stock, opponentColor) {
   return threats;
 }
 
+function countThreats(board, stock, aiColor) {
+  // Count 2+ simultaneous winning threats (forks)
+  let threatCount = 0;
+  const directions = [
+    {dr: 0, dc: 1}, // horizontal
+    {dr: 1, dc: 0}, // vertical
+    {dr: 1, dc: 1}, // diagonal /
+    {dr: 1, dc: -1} // diagonal \
+  ];
+
+  // Check each empty cell as potential completion
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece) continue; // occupied
+
+      // Count how many directions would have 2+ same-color pieces
+      let directionScore = 0;
+
+      for (const dir of directions) {
+        let count = 0;
+
+        // Count same-color pieces in this direction (including diagonals)
+        for (let dist = -3; dist <= 3; dist++) {
+          const nr = r + dir.dr * dist;
+          const nc = c + dir.dc * dist;
+          if (nr < 0 || nr >= 4 || nc < 0 || nc >= 4) continue;
+          if (!board[nr][nc].piece || board[nr][nc].piece.color !== aiColor) continue;
+          count++;
+        }
+
+        if (count >= 2) directionScore++;
+      }
+
+      // If 2+ directions have 2+ pieces, this is a fork-setup
+      if (directionScore >= 2) threatCount++;
+    }
+  }
+
+  return threatCount;
+}
+
 function evalLeaf(board, stock, aiColor) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
   let score = 0;
