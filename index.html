@@ -1927,22 +1927,13 @@ function hashBoard() {
 }
 
 function startCountdown() {
-  thinkingStartTime = Date.now();
   const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
-
-  if (countdownInterval) clearInterval(countdownInterval);
-  countdownInterval = setInterval(() => {
-    const elapsed = Date.now() - thinkingStartTime;
-    const remaining = Math.max(0, (TIME_LIMIT - elapsed) / 1000).toFixed(1);
-    updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}] ${remaining}s`);
-  }, 100);
+  const timeBudget = (TIME_LIMIT / 1000).toFixed(0);
+  updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}] ${timeBudget}s`);
 }
 
 function stopCountdown() {
-  if (countdownInterval) {
-    clearInterval(countdownInterval);
-    countdownInterval = null;
-  }
+  // No-op - static display doesn't need cleanup
 }
 
 function nextTurn() {
@@ -2252,7 +2243,7 @@ function evalLeaf(board, stock, aiColor) {
   score += (stock[aiColor].small + stock[aiColor].large) * 5;
   score -= (stock[opColor].small + stock[opColor].large) * 5;
 
-  // Threat count: ±20 per opponent winning move
+  // Threat count: opponent threats -50 each, AI threats +50 each (with fork bonus)
   let opponentThreats = 0;
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 4; c++) {
@@ -2266,7 +2257,28 @@ function evalLeaf(board, stock, aiColor) {
       }
     }
   }
-  score -= opponentThreats * 20;
+  score -= opponentThreats * 50;
+
+  // AI threat creation: positions where AI can win in 1 move
+  let aiThreats = 0;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece || stock[aiColor].small === 0 && stock[aiColor].large === 0) continue;
+      const backup = board[r][c].piece;
+      for (const size of ["small", "large"]) {
+        if (stock[aiColor][size] === 0) continue;
+        board[r][c].piece = { color: aiColor, size };
+        if (checkWin(aiColor)) aiThreats++;
+        board[r][c].piece = backup;
+      }
+    }
+  }
+  // Fork bonus: 2+ threats = much stronger (exponential value)
+  if (aiThreats >= 2) {
+    score += aiThreats * 80; // 80 per threat when forking, bonus for multiple
+  } else {
+    score += aiThreats * 50; // 50 per threat for single threats
+  }
 
   return score;
 }
@@ -2277,6 +2289,77 @@ function moveOrder(moves, board, stock, aiColor) {
   return moves.sort((a, b) => {
     const aRow = a.cell.row, aCol = a.cell.col;
     const bRow = b.cell.row, bCol = b.cell.col;
+
+    // Priority 0: Block opponent's immediate winning moves (HIGHEST PRIORITY)
+    // Check if opponent can win at this position with any available piece size
+    let aOpponentCanWin = 0;
+    if (stock[opColor].small > 0) {
+      const aBackup = board[aRow][aCol].piece;
+      board[aRow][aCol].piece = { color: opColor, size: "small" };
+      if (checkWin(opColor)) aOpponentCanWin = 1;
+      board[aRow][aCol].piece = aBackup;
+    }
+    if (!aOpponentCanWin && stock[opColor].large > 0) {
+      const aBackup = board[aRow][aCol].piece;
+      board[aRow][aCol].piece = { color: opColor, size: "large" };
+      if (checkWin(opColor)) aOpponentCanWin = 1;
+      board[aRow][aCol].piece = aBackup;
+    }
+
+    let bOpponentCanWin = 0;
+    if (stock[opColor].small > 0) {
+      const bBackup = board[bRow][bCol].piece;
+      board[bRow][bCol].piece = { color: opColor, size: "small" };
+      if (checkWin(opColor)) bOpponentCanWin = 1;
+      board[bRow][bCol].piece = bBackup;
+    }
+    if (!bOpponentCanWin && stock[opColor].large > 0) {
+      const bBackup = board[bRow][bCol].piece;
+      board[bRow][bCol].piece = { color: opColor, size: "large" };
+      if (checkWin(opColor)) bOpponentCanWin = 1;
+      board[bRow][bCol].piece = bBackup;
+    }
+
+    if (aOpponentCanWin !== bOpponentCanWin) return bOpponentCanWin - aOpponentCanWin;
+
+    // Sub-ranking for blocking moves: if both block, prefer strategic blocks
+    // that also create AI threats or control better positions
+    if (aOpponentCanWin && bOpponentCanWin) {
+      // Both moves block equally - rank by strategic value
+      let aBlockValue = 0;
+      let bBlockValue = 0;
+
+      // Sub 1: Does blocking move also create AI threat?
+      const aBlockBackupCheck = board[aRow][aCol].piece;
+      board[aRow][aCol].piece = { color: aiColor, size: a.size };
+      for (const size of ["small", "large"]) {
+        if (stock[aiColor][size] > 0) {
+          board[aRow][aCol].piece.size = size;
+          if (checkWin(aiColor)) aBlockValue += 100; // Big bonus for creating win
+        }
+      }
+      board[aRow][aCol].piece = aBlockBackupCheck;
+
+      const bBlockBackupCheck = board[bRow][bCol].piece;
+      board[bRow][bCol].piece = { color: aiColor, size: b.size };
+      for (const size of ["small", "large"]) {
+        if (stock[aiColor][size] > 0) {
+          board[bRow][bCol].piece.size = size;
+          if (checkWin(aiColor)) bBlockValue += 100;
+        }
+      }
+      board[bRow][bCol].piece = bBlockBackupCheck;
+
+      // Sub 2: Position value (center positions better for control)
+      aBlockValue += POSITION_SCORE[aRow][aCol];
+      bBlockValue += POSITION_SCORE[bRow][bCol];
+
+      // Sub 3: Prefer larger pieces for blocking (more durable)
+      if (a.size === "large") aBlockValue += 5;
+      if (b.size === "large") bBlockValue += 5;
+
+      if (aBlockValue !== bBlockValue) return bBlockValue - aBlockValue;
+    }
 
     // Priority 1: Immediate AI wins
     const aBackup = board[aRow][aCol].piece;
@@ -2386,12 +2469,30 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime
   return bestScore;
 }
 
+function quickMoveScore(move, board, stock, aiColor) {
+  // Fast heuristic score: position value + piece value
+  let score = POSITION_SCORE[move.cell.row][move.cell.col];
+  score += move.size === "large" ? 10 : 3;
+
+  // Check if move creates immediate win
+  const r = move.cell.row, c = move.cell.col;
+  const backup = board[r][c].piece;
+  board[r][c].piece = { color: aiColor, size: move.size };
+  if (checkWin(aiColor)) score += 1000;
+  board[r][c].piece = backup;
+
+  return score;
+}
+
 function iterativeDeepen(board, stock, aiColor) {
-  const moves = getAllMoves(aiColor);
+  let moves = getAllMoves(aiColor);
   if (!moves.length) {
     pcNoMoves();
     return null;
   }
+
+  // Pre-sort moves by quick heuristic (better moves first = faster pruning)
+  moves.sort((a, b) => quickMoveScore(b, board, stock, aiColor) - quickMoveScore(a, board, stock, aiColor));
 
   let bestMove = moves[0];
   let bestScore = -Infinity;
