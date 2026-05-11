@@ -2321,6 +2321,12 @@ function evalLeaf(board, stock, aiColor) {
   return score;
 }
 
+function moveEquals(move1, move2) {
+  return move1.cell.row === move2.cell.row &&
+         move1.cell.col === move2.cell.col &&
+         move1.size === move2.size;
+}
+
 function moveOrder(moves, board, stock, aiColor) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
 
