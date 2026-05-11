@@ -531,7 +531,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button onclick="startPCGame('demon')" style="display:none;">👿 DEMON</button>
   <button onclick="startPCGame('demon3')">☠️ DEMON 3</button>
   <button onclick="startPCGame('demon2')">💀 DEMON 2</button>
-  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: minimax · DEMON 2: MCTS · DEMON 3: deeper search</div>
+  <div class="diff-desc">DEMON 2: MCTS · DEMON 3: deeper search</div>
   <button onclick="hideDifficultyMenu()">↩ Back</button>
 </div>
 
@@ -1347,7 +1347,8 @@ function exportReplayAsJSON(replayIndex) {
     moves: replay.moves,
     timestamp: replay.timestampISO || new Date(replay.timestamp).toISOString(),
     finalWinner: replay.finalWinner || null,
-    duration_seconds: replay.duration_seconds || 0
+    duration_seconds: replay.duration_seconds || 0,
+    difficulty: replay.difficulty || null
   };
   return JSON.stringify(exported, null, 2);
 }
