@@ -485,6 +485,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 0%;
   z-index: 1;
   pointer-events: none;
+  animation: stockFill 5s linear forwards;
+}
+
+@keyframes stockFill {
+  from { width: 0%; }
+  to { width: 100%; }
 }
 </style>
 </head>
@@ -1644,29 +1650,16 @@ function startThinkingProgress() {
   thinkingStartTime = Date.now();
   const rightStock = document.getElementById("rightStock");
 
-  // Create progress bar if not exists
+  // Create progress bar if not exists (CSS animation handles the fill)
   let progressBar = rightStock.querySelector(".stock-progress");
   if (!progressBar) {
     progressBar = document.createElement("div");
     progressBar.className = "stock-progress";
     rightStock.insertBefore(progressBar, rightStock.firstChild);
   }
-
-  // Start update loop
-  if (thinkingProgressInterval) clearInterval(thinkingProgressInterval);
-  thinkingProgressInterval = setInterval(() => {
-    const elapsed = Date.now() - thinkingStartTime;
-    const percent = Math.min((elapsed / TIME_LIMIT) * 100, 100);
-    const bar = rightStock.querySelector(".stock-progress");
-    if (bar) bar.style.width = percent + "%";
-  }, 50);
 }
 
 function stopThinkingProgress() {
-  if (thinkingProgressInterval) {
-    clearInterval(thinkingProgressInterval);
-    thinkingProgressInterval = null;
-  }
   const rightStock = document.getElementById("rightStock");
   const progressBar = rightStock.querySelector(".stock-progress");
   if (progressBar) progressBar.remove();
