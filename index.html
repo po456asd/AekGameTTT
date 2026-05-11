@@ -2284,8 +2284,13 @@ function moveOrder(moves, board, stock, aiColor) {
   });
 }
 
-function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt) {
+function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
+
+  // 0. Check time limit (stop search if exceeded)
+  if (Date.now() - startTime > TIME_LIMIT) {
+    return evalLeaf(board, stock, aiColor);
+  }
 
   // 1. Check transposition table
   const hash = boardHash(board, stock);
@@ -2328,7 +2333,7 @@ function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt) {
     board[r][c].piece = { color, size: move.size };
     stock[color][move.size]--;
 
-    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt);
+    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt, startTime);
 
     board[r][c].piece = backup;
     stock[color].small = backupStock[color].small;
@@ -2376,7 +2381,7 @@ function iterativeDeepen(board, stock, aiColor) {
       board[r][c].piece = { color: aiColor, size: move.size };
       stock[aiColor][move.size]--;
 
-      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt);
+      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt, startTime);
 
       board[r][c].piece = backup;
       stock[aiColor].small = backupStock[aiColor].small;
