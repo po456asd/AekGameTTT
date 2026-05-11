@@ -2421,79 +2421,41 @@ function moveEquals(move1, move2) {
 function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
 
+  // NEW: Detect opponent threats
+  const opponentColor = aiColor === "red" ? "yellow" : "red";
+  const threats = detectThreats(board, stock, opponentColor);
+
   return moves.sort((a, b) => {
     const aRow = a.cell.row, aCol = a.cell.col;
     const bRow = b.cell.row, bCol = b.cell.col;
 
-    // Priority 0: Block opponent's immediate winning moves (HIGHEST PRIORITY)
-    // Check if opponent can win at this position with any available piece size
-    let aOpponentCanWin = 0;
-    if (stock[opColor].small > 0) {
-      const aBackup = board[aRow][aCol].piece;
-      board[aRow][aCol].piece = { color: opColor, size: "small" };
-      if (checkWin(opColor)) aOpponentCanWin = 1;
-      board[aRow][aCol].piece = aBackup;
-    }
-    if (!aOpponentCanWin && stock[opColor].large > 0) {
-      const aBackup = board[aRow][aCol].piece;
-      board[aRow][aCol].piece = { color: opColor, size: "large" };
-      if (checkWin(opColor)) aOpponentCanWin = 1;
-      board[aRow][aCol].piece = aBackup;
-    }
-
-    let bOpponentCanWin = 0;
-    if (stock[opColor].small > 0) {
-      const bBackup = board[bRow][bCol].piece;
-      board[bRow][bCol].piece = { color: opColor, size: "small" };
-      if (checkWin(opColor)) bOpponentCanWin = 1;
-      board[bRow][bCol].piece = bBackup;
-    }
-    if (!bOpponentCanWin && stock[opColor].large > 0) {
-      const bBackup = board[bRow][bCol].piece;
-      board[bRow][bCol].piece = { color: opColor, size: "large" };
-      if (checkWin(opColor)) bOpponentCanWin = 1;
-      board[bRow][bCol].piece = bBackup;
-    }
-
-    if (aOpponentCanWin !== bOpponentCanWin) return bOpponentCanWin - aOpponentCanWin;
-
-    // Sub-ranking for blocking moves: if both block, prefer strategic blocks
-    // that also create AI threats or control better positions
-    if (aOpponentCanWin && bOpponentCanWin) {
-      // Both moves block equally - rank by strategic value
-      let aBlockValue = 0;
-      let bBlockValue = 0;
-
-      // Sub 1: Does blocking move also create AI threat?
-      const aBlockBackupCheck = board[aRow][aCol].piece;
-      board[aRow][aCol].piece = { color: aiColor, size: a.size };
-      for (const size of ["small", "large"]) {
-        if (stock[aiColor][size] > 0) {
-          board[aRow][aCol].piece.size = size;
-          if (checkWin(aiColor)) aBlockValue += 100; // Big bonus for creating win
+    // Priority 0: Block opponent threats (highest priority)
+    if (threats.length > 0) {
+      let aBlocksThreat = false, bBlocksThreat = false;
+      for (const threat of threats) {
+        if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) {
+          aBlocksThreat = true;
+          break;
         }
       }
-      board[aRow][aCol].piece = aBlockBackupCheck;
-
-      const bBlockBackupCheck = board[bRow][bCol].piece;
-      board[bRow][bCol].piece = { color: aiColor, size: b.size };
-      for (const size of ["small", "large"]) {
-        if (stock[aiColor][size] > 0) {
-          board[bRow][bCol].piece.size = size;
-          if (checkWin(aiColor)) bBlockValue += 100;
+      for (const threat of threats) {
+        if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) {
+          bBlocksThreat = true;
+          break;
         }
       }
-      board[bRow][bCol].piece = bBlockBackupCheck;
-
-      // Sub 2: Position value (center positions better for control)
-      aBlockValue += POSITION_SCORE[aRow][aCol];
-      bBlockValue += POSITION_SCORE[bRow][bCol];
-
-      // Sub 3: Prefer larger pieces for blocking (more durable)
-      if (a.size === "large") aBlockValue += 5;
-      if (b.size === "large") bBlockValue += 5;
-
-      if (aBlockValue !== bBlockValue) return bBlockValue - aBlockValue;
+      // Both block = compare by threat severity
+      if (aBlocksThreat && bBlocksThreat) {
+        // Find severity of each
+        let aSev = 0, bSev = 0;
+        for (const threat of threats) {
+          if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) aSev = threat.severity;
+          if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) bSev = threat.severity;
+        }
+        if (aSev !== bSev) return bSev - aSev; // Higher severity = stronger block
+      }
+      // One blocks, one doesn't
+      if (aBlocksThreat !== bBlocksThreat) return bBlocksThreat ? 1 : -1;
     }
 
     // Priority 1: Immediate AI wins
