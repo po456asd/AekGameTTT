@@ -2264,6 +2264,72 @@ function moveOrder(moves, board, stock, aiColor) {
   });
 }
 
+function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+
+  // 1. Check transposition table
+  const hash = boardHash(board, stock);
+  if (tt[hash] && tt[hash].depth >= depth) {
+    return tt[hash].score;
+  }
+
+  // 2. Terminal check
+  if (checkWin(aiColor)) {
+    return WIN_SCORE + depth; // Prefer faster wins
+  }
+  if (checkWin(opColor)) {
+    return LOSS_SCORE - depth; // Prefer slower losses
+  }
+  const aiMoves = getAllMoves(aiColor);
+  const opMoves = getAllMoves(opColor);
+  if (!aiMoves.length && !opMoves.length) {
+    return DRAW_SCORE;
+  }
+
+  // 3. Depth limit reached
+  if (depth === 0) {
+    const score = evalLeaf(board, stock, aiColor);
+    tt[hash] = { score, depth };
+    return score;
+  }
+
+  // 4. Generate and order moves
+  const moves = isMax ? aiMoves : opMoves;
+  const color = isMax ? aiColor : opColor;
+  const orderedMoves = moveOrder(moves, board, stock, color);
+
+  // 5. Alpha-beta loop
+  let bestScore = isMax ? -Infinity : Infinity;
+  for (const move of orderedMoves) {
+    const r = move.cell.row, c = move.cell.col;
+    const backup = board[r][c].piece;
+    const backupStock = JSON.parse(JSON.stringify(stock));
+
+    board[r][c].piece = { color, size: move.size };
+    stock[color][move.size]--;
+
+    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt);
+
+    board[r][c].piece = backup;
+    stock[color].small = backupStock[color].small;
+    stock[color].large = backupStock[color].large;
+
+    if (isMax) {
+      bestScore = Math.max(bestScore, score);
+      alpha = Math.max(alpha, bestScore);
+    } else {
+      bestScore = Math.min(bestScore, score);
+      beta = Math.min(beta, bestScore);
+    }
+
+    if (beta <= alpha) break; // Prune
+  }
+
+  // 6. Store in transposition table
+  tt[hash] = { score: bestScore, depth };
+  return bestScore;
+}
+
 function pcMoveDemon2() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
