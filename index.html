@@ -2226,6 +2226,44 @@ function evalLeaf(board, stock, aiColor) {
   return score;
 }
 
+function moveOrder(moves, board, stock, aiColor) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+
+  return moves.sort((a, b) => {
+    const aRow = a.cell.row, aCol = a.cell.col;
+    const bRow = b.cell.row, bCol = b.cell.col;
+
+    // Priority 1: Immediate AI wins
+    const aBackup = board[aRow][aCol].piece;
+    board[aRow][aCol].piece = { color: aiColor, size: a.size };
+    const aWins = checkWin(aiColor) ? 1 : 0;
+    board[aRow][aCol].piece = aBackup;
+
+    const bBackup = board[bRow][bCol].piece;
+    board[bRow][bCol].piece = { color: aiColor, size: b.size };
+    const bWins = checkWin(aiColor) ? 1 : 0;
+    board[bRow][bCol].piece = bBackup;
+
+    if (aWins !== bWins) return bWins - aWins;
+
+    // Priority 2: Opponent blocking moves
+    const aBlockBackup = board[aRow][aCol].piece;
+    board[aRow][aCol].piece = { color: opColor, size: a.size };
+    const aBlocks = checkWin(opColor) ? 1 : 0;
+    board[aRow][aCol].piece = aBlockBackup;
+
+    const bBlockBackup = board[bRow][bCol].piece;
+    board[bRow][bCol].piece = { color: opColor, size: b.size };
+    const bBlocks = checkWin(opColor) ? 1 : 0;
+    board[bRow][bCol].piece = bBlockBackup;
+
+    if (aBlocks !== bBlocks) return bBlocks - aBlocks;
+
+    // Priority 3: Center positions
+    return POSITION_SCORE[bRow][bCol] - POSITION_SCORE[aRow][aCol];
+  });
+}
+
 function pcMoveDemon2() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
