@@ -2556,6 +2556,7 @@ function iterativeDeepen(board, stock, aiColor) {
 
   let bestMove = moves[0];
   let bestScore = -Infinity;
+  const killerMoves = {}; // Track killer moves per depth
   const tt = {}; // Transposition table for this search
   const startTime = Date.now();
 
@@ -2573,7 +2574,7 @@ function iterativeDeepen(board, stock, aiColor) {
       board[r][c].piece = { color: aiColor, size: move.size };
       stock[aiColor][move.size]--;
 
-      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt, startTime);
+      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt, startTime, killerMoves);
 
       board[r][c].piece = backup;
       stock[aiColor].small = backupStock[aiColor].small;
