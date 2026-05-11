@@ -529,8 +529,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <button onclick="startPCGame('normal')" style="display:none;">🤔 Normal</button>
   <button onclick="startPCGame('hell')" style="display:none;">😈 Hell</button>
   <button onclick="startPCGame('demon')" style="display:none;">👿 DEMON</button>
+  <button onclick="startPCGame('demon3')">☠️ DEMON 3</button>
   <button onclick="startPCGame('demon2')">💀 DEMON 2</button>
-  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: minimax · DEMON 2: MCTS</div>
+  <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: minimax · DEMON 2: MCTS · DEMON 3: deeper search</div>
   <button onclick="hideDifficultyMenu()">↩ Back</button>
 </div>
 
@@ -2065,7 +2066,11 @@ function pcNoMoves() {
 
 // ── PC Easy ───────────────────────────────────────────
 function pcMove() {
-  pcMoveDemon2();
+  if (pcDifficulty === "demon3") {
+    pcMoveDemon3();
+  } else {
+    pcMoveDemon2();
+  }
 }
 
 
@@ -2698,6 +2703,15 @@ function iterativeDeepen(board, stock, aiColor, difficulty) {
 
 function pcMoveDemon2() {
   const move = iterativeDeepen(cells, stock, "yellow", "DEMON2");
+  if (move) {
+    doPCMove(move);
+  } else {
+    pcNoMoves();
+  }
+}
+
+function pcMoveDemon3() {
+  const move = iterativeDeepen(cells, stock, "yellow", "DEMON3");
   if (move) {
     doPCMove(move);
   } else {
