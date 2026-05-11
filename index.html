@@ -2252,6 +2252,56 @@ function zobristHash(board, stock) {
   return hash;
 }
 
+// ── Threat Detection ───────────────────────────────
+function detectThreats(board, stock, opponentColor) {
+  const threats = [];
+  const directions = [
+    {dr: 0, dc: 1}, // horizontal
+    {dr: 1, dc: 0}, // vertical
+    {dr: 1, dc: 1}, // diagonal /
+    {dr: 1, dc: -1} // diagonal \
+  ];
+
+  // Check each cell as potential threat location
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece) continue; // occupied, can't block here
+
+      // Check if this cell would complete opponent win
+      let severity = 0;
+
+      for (const dir of directions) {
+        let count = 0;
+        let largeCount = 0;
+
+        // Count same-color pieces in this direction
+        for (let dist = -3; dist <= 3; dist++) {
+          const nr = r + dir.dr * dist;
+          const nc = c + dir.dc * dist;
+          if (nr < 0 || nr >= 4 || nc < 0 || nc >= 4) continue;
+          if (!board[nr][nc].piece || board[nr][nc].piece.color !== opponentColor) continue;
+
+          count++;
+          if (board[nr][nc].piece.size === "large") largeCount++;
+        }
+
+        // 3-in-a-row = IMMEDIATE_WIN (severity 10)
+        if (count === 3) severity = Math.max(severity, 10);
+        // 2-in-a-row = high threat (severity 8)
+        else if (count === 2) severity = Math.max(severity, 8);
+      }
+
+      if (severity > 0) {
+        threats.push({ cell: {row: r, col: c}, severity });
+      }
+    }
+  }
+
+  // Sort by severity DESC
+  threats.sort((a, b) => b.severity - a.severity);
+  return threats;
+}
+
 function evalLeaf(board, stock, aiColor) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
   let score = 0;
