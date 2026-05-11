@@ -2190,6 +2190,32 @@ function evalMoveStrength(move, color) {
 
 // ── Demon2 Perfect AI Constants ────────────────────
 const MAX_DEPTH = 12;
+
+// ── Zobrist Hash Table ─────────────────────────────
+function initZobristTable() {
+  const zobrist = {};
+
+  // 256 random 32-bit integers for pieces (16 cells × 4 piece types)
+  zobrist.pieces = [];
+  for (let i = 0; i < 256; i++) {
+    zobrist.pieces[i] = Math.floor(Math.random() * 0x100000000);
+  }
+
+  // 512 random integers for stock state
+  zobrist.stock = [];
+  for (let i = 0; i < 512; i++) {
+    zobrist.stock[i] = Math.floor(Math.random() * 0x100000000);
+  }
+
+  return zobrist;
+}
+
+let zobristTable = initZobristTable();
+
+function colorToNum(color) {
+  return color === "red" ? 0 : color === "yellow" ? 1 : 2;
+}
+
 const WIN_SCORE = 1000;
 const LOSS_SCORE = -1000;
 const DRAW_SCORE = 0;
