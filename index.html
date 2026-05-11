@@ -714,6 +714,8 @@ let gameStartTime = null;
 let p2pMode = false;
 let myColor = null;
 let pcDifficulty = "normal";
+let thinkingStartTime = null;
+let countdownInterval = null;
 
 // P2P sync tracking
 let pendingMoveId = null;
@@ -1923,6 +1925,25 @@ function hashBoard() {
   return hash;
 }
 
+function startCountdown() {
+  thinkingStartTime = Date.now();
+  const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
+
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    const elapsed = Date.now() - thinkingStartTime;
+    const remaining = Math.max(0, (TIME_LIMIT - elapsed) / 1000).toFixed(1);
+    updateStatus(`<span class="loading"></span> Thinking... [${diffLabel}] ${remaining}s`);
+  }, 100);
+}
+
+function stopCountdown() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
 function nextTurn() {
   if (mode === "pc" && current === "red") {
     current = "yellow";
@@ -1930,7 +1951,10 @@ function nextTurn() {
     buildStocks();
     const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
     updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}]`);
-    setTimeout(pcMove, 600);
+    setTimeout(() => {
+      startCountdown();
+      pcMove();
+    }, 600);
   } else {
     current = current === "red" ? "blue" : "red";
     buildStocks();
@@ -2011,6 +2035,7 @@ function doPCMove(move) {
 
     current = "red";
     thinking = false;
+    stopCountdown();
     buildStocks();
 
     // Check if Red has valid moves
@@ -2035,6 +2060,7 @@ function doPCMove(move) {
 
 function pcNoMoves() {
   thinking = false;
+  stopCountdown();
   current = "red";
   buildStocks();
   if (!hasValidMoves("yellow")) {
