@@ -449,6 +449,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   from { transform: translateX(0); opacity: 1; }
   to { transform: translateX(400px); opacity: 0; }
 }
+
+.thinking-progress {
+  width: 200px;
+  height: 3px;
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.thinking-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4488ff, #ffdd33);
+  width: 0%;
+  animation: fillBar 10s linear forwards;
+}
+
+@keyframes fillBar {
+  to { width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -504,10 +524,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 <div id="difficultyMenu">
   <p>Select Difficulty:</p>
-  <button onclick="startPCGame('easy')">😊 Easy</button>
-  <button onclick="startPCGame('normal')">🤔 Normal</button>
-  <button onclick="startPCGame('hell')">😈 Hell</button>
-  <button onclick="startPCGame('demon')">👿 DEMON</button>
+  <button onclick="startPCGame('easy')" style="display:none;">😊 Easy</button>
+  <button onclick="startPCGame('normal')" style="display:none;">🤔 Normal</button>
+  <button onclick="startPCGame('hell')" style="display:none;">😈 Hell</button>
+  <button onclick="startPCGame('demon')" style="display:none;">👿 DEMON</button>
   <button onclick="startPCGame('demon2')">💀 DEMON 2</button>
   <div class="diff-desc">Easy: random · Normal: win/block · Hell: strategic · DEMON: minimax · DEMON 2: MCTS</div>
   <button onclick="hideDifficultyMenu()">↩ Back</button>
@@ -1588,7 +1608,7 @@ function updateStatus(txt) {
     statusEl.innerHTML = txt;
   } else {
     if (thinking) {
-      statusEl.innerHTML = `<span class="loading"></span> Thinking...`;
+      statusEl.innerHTML = `<span class="loading"></span> Thinking...<div class="thinking-progress"><div class="thinking-progress-bar"></div></div>`;
     } else {
       let status = `Turn: ${current}`;
       if (p2pMode) {
