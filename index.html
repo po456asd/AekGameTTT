@@ -1928,9 +1928,11 @@ function hashBoard() {
 }
 
 function startCountdown() {
-  const diffLabel = pcDifficulty === "demon" ? "👿 DEMON" : pcDifficulty;
-  const timeBudget = (TIME_LIMIT / 1000).toFixed(0);
-  updateStatus(`<span class="loading"></span> PC thinking... [${diffLabel}] ${timeBudget}s`);
+  const diffLabel = pcDifficulty === "demon3" ? "☠️ DEMON 3"
+    : pcDifficulty === "demon2" ? "💀 DEMON 2"
+    : pcDifficulty === "demon" ? "👿 DEMON"
+    : pcDifficulty.toUpperCase();
+  updateStatus(`<span class="loading"></span> PC (${diffLabel}) thinking...`);
 }
 
 function stopCountdown() {
