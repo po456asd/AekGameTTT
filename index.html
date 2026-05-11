@@ -2640,15 +2640,20 @@ function quickMoveScore(move, board, stock, aiColor) {
   return score;
 }
 
-function iterativeDeepen(board, stock, aiColor) {
+function iterativeDeepen(board, stock, aiColor, difficulty) {
   let moves = getAllMoves(aiColor);
   if (!moves.length) {
     pcNoMoves();
     return null;
   }
 
-  // Pre-sort moves by quick heuristic (better moves first = faster pruning)
-  moves.sort((a, b) => quickMoveScore(b, board, stock, aiColor) - quickMoveScore(a, board, stock, aiColor));
+  // For DEMON3, pre-sort moves at root for faster pruning
+  if (difficulty === "DEMON3") {
+    moves = rootMoveOrder(moves, board, stock, aiColor);
+  } else {
+    // Pre-sort moves by quick heuristic (better moves first = faster pruning)
+    moves.sort((a, b) => quickMoveScore(b, board, stock, aiColor) - quickMoveScore(a, board, stock, aiColor));
+  }
 
   let bestMove = moves[0];
   let bestScore = -Infinity;
@@ -2692,7 +2697,7 @@ function iterativeDeepen(board, stock, aiColor) {
 }
 
 function pcMoveDemon2() {
-  const move = iterativeDeepen(cells, stock, "yellow");
+  const move = iterativeDeepen(cells, stock, "yellow", "DEMON2");
   if (move) {
     doPCMove(move);
   } else {
