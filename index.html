@@ -2378,31 +2378,12 @@ function iterativeDeepen(board, stock, aiColor) {
 }
 
 function pcMoveDemon2() {
-  let move = findWinningMove("yellow");
-  if (move) { doPCMove(move); return; }
-
-  move = findWinningMove("red", true);
-  if (move) { doPCMove(move); return; }
-
-  // Look for fork (multiple winning threats)
-  move = findForkMove("yellow");
-  if (move) { doPCMove(move); return; }
-
-  const moves = getAllMoves("yellow");
-  if (!moves.length) { pcNoMoves(); return; }
-
-  // Sort by threat strength — evaluate high-threat moves first
-  const movesWithStrength = moves.map(m => ({ move: m, strength: evalMoveStrength(m, "yellow") }));
-  movesWithStrength.sort((a, b) => b.strength - a.strength);
-
-  let best = null, bestScore = -1;
-  const startTime = Date.now();
-  for (const { move: m } of movesWithStrength) {
-    if (Date.now() - startTime > 3500) break;
-    const score = evalMoveDemon2(m, 50);
-    if (score > bestScore) { bestScore = score; best = m; }
+  const move = iterativeDeepen(cells, stock, "yellow");
+  if (move) {
+    doPCMove(move);
+  } else {
+    pcNoMoves();
   }
-  doPCMove(best || moves[0]);
 }
 
 // ── Init ───────────────────────────────────────────────
