@@ -2418,6 +2418,49 @@ function moveEquals(move1, move2) {
          move1.size === move2.size;
 }
 
+function rootMoveOrder(moves, board, stock, aiColor) {
+  // Root-level move pre-sorting for faster search
+  const opponentColor = aiColor === "yellow" ? "red" : "yellow";
+  const threats = detectThreats(board, stock, opponentColor);
+
+  return moves.sort((a, b) => {
+    let scoreA = 0, scoreB = 0;
+
+    // 1. Blocking opponent threats (+40)
+    let aBlocks = false, bBlocks = false;
+    for (const threat of threats) {
+      if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) aBlocks = true;
+      if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) bBlocks = true;
+    }
+    scoreA += aBlocks ? 40 : 0;
+    scoreB += bBlocks ? 40 : 0;
+
+    // 2. Creating AI threats (+50)
+    // Quick heuristic: placing large pieces near existing pieces
+    let aNearOwn = 0, bNearOwn = 0;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (!board[r][c].piece || board[r][c].piece.color !== aiColor) continue;
+        if (Math.abs(a.cell.row - r) <= 1 && Math.abs(a.cell.col - c) <= 1) aNearOwn++;
+        if (Math.abs(b.cell.row - r) <= 1 && Math.abs(b.cell.col - c) <= 1) bNearOwn++;
+      }
+    }
+    scoreA += aNearOwn > 0 ? 30 : 0;
+    scoreB += bNearOwn > 0 ? 30 : 0;
+
+    // 3. Center control (+10)
+    const centerScore = (r, c) => 4 - Math.abs(r - 1.5) - Math.abs(c - 1.5);
+    scoreA += centerScore(a.cell.row, a.cell.col);
+    scoreB += centerScore(b.cell.row, b.cell.col);
+
+    // 4. Large pieces (+5)
+    if (a.size === "large") scoreA += 5;
+    if (b.size === "large") scoreB += 5;
+
+    return scoreB - scoreA; // Descending
+  });
+}
+
 function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
   const opColor = aiColor === "yellow" ? "red" : "yellow";
 
