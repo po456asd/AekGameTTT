@@ -2178,6 +2178,54 @@ function boardHash(board, stock) {
   return hash;
 }
 
+function evalLeaf(board, stock, aiColor) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+  let score = 0;
+
+  // Piece count differential: ±10 per piece
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (!board[r][c].piece) continue;
+      const p = board[r][c].piece;
+      const isAI = p.color === aiColor;
+      const pointValue = p.size === "large" ? 15 : 8;
+      score += isAI ? pointValue : -pointValue;
+    }
+  }
+
+  // Position control: corners +10, center +5, edges +2
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (!board[r][c].piece) continue;
+      const p = board[r][c].piece;
+      const posValue = POSITION_SCORE[r][c];
+      score += p.color === aiColor ? posValue : -posValue;
+    }
+  }
+
+  // Stock advantage: ±5 per piece
+  score += (stock[aiColor].small + stock[aiColor].large) * 5;
+  score -= (stock[opColor].small + stock[opColor].large) * 5;
+
+  // Threat count: ±20 per opponent winning move
+  let opponentThreats = 0;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece || stock[opColor].small === 0 && stock[opColor].large === 0) continue;
+      const backup = board[r][c].piece;
+      for (const size of ["small", "large"]) {
+        if (stock[opColor][size] === 0) continue;
+        board[r][c].piece = { color: opColor, size };
+        if (checkWin(opColor)) opponentThreats++;
+        board[r][c].piece = backup;
+      }
+    }
+  }
+  score -= opponentThreats * 20;
+
+  return score;
+}
+
 function pcMoveDemon2() {
   let move = findWinningMove("yellow");
   if (move) { doPCMove(move); return; }
