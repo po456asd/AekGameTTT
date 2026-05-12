@@ -2260,6 +2260,130 @@ function zobristHash(board, stock) {
   return hash;
 }
 
+// ── Monte Carlo Tree Search with Network Guidance ───────────────────
+class MCTSNode {
+  constructor(board, stock, move = null) {
+    this.board = JSON.parse(JSON.stringify(board));
+    this.stock = JSON.parse(JSON.stringify(stock));
+    this.move = move;
+    this.visits = 0;
+    this.value = 0; // Accumulated value
+    this.children = [];
+    this.parent = null;
+  }
+}
+
+async function mctsSearch(board, stock, aiColor, network, simulations = 200, timeLimit = 5000) {
+  const startTime = Date.now();
+  const root = new MCTSNode(board, stock);
+
+  let simulationCount = 0;
+  while (simulationCount < simulations && Date.now() - startTime < timeLimit) {
+    // Selection + Expansion
+    let node = root;
+    let path = [node];
+
+    while (node.children.length > 0 && Date.now() - startTime < timeLimit) {
+      // UCB1 selection with network policy bias
+      let bestChild = null;
+      let bestUCB = -Infinity;
+
+      for (const child of node.children) {
+        const exploitation = child.value / (child.visits || 1);
+        const exploration = Math.sqrt(Math.log(node.visits) / (child.visits || 1));
+        const ucb = exploitation + exploration;
+
+        if (ucb > bestUCB) {
+          bestUCB = ucb;
+          bestChild = child;
+        }
+      }
+
+      node = bestChild;
+      path.push(node);
+    }
+
+    // Expansion: generate children if not terminal
+    if (node.children.length === 0 && !isTerminal(node.board, node.stock)) {
+      const moves = getAllMoves(aiColor === 'red' ? 'red' : 'yellow');
+
+      for (const move of moves) {
+        const childBoard = JSON.parse(JSON.stringify(node.board));
+        const childStock = JSON.parse(JSON.stringify(node.stock));
+
+        // Make move
+        const r = move.cell.row, c = move.cell.col;
+        childBoard[r][c].piece = { color: aiColor, size: move.size };
+        childStock[aiColor][move.size]--;
+
+        const child = new MCTSNode(childBoard, childStock, move);
+        child.parent = node;
+        node.children.push(child);
+      }
+    }
+
+    // Evaluation: use network value estimate
+    const boardEncoding = encodeBoardForNetwork(node.board);
+    const [policy, value] = await network.predict(boardEncoding);
+
+    const nodeValue = value.dataSync()[0]; // Value in [-1, +1]
+    value.dispose(); // Clean up tensor
+    policy.dispose();
+
+    // Backup: propagate value up tree
+    for (const n of path) {
+      n.visits++;
+      n.value += nodeValue;
+    }
+
+    simulationCount++;
+  }
+
+  // Return best move (highest visit count = most explored = best estimate)
+  let bestMove = null;
+  let maxVisits = 0;
+
+  for (const child of root.children) {
+    if (child.visits > maxVisits) {
+      maxVisits = child.visits;
+      bestMove = child.move;
+    }
+  }
+
+  return bestMove;
+}
+
+function encodeBoardForNetwork(board) {
+  // Convert 4x4 board to 80-dim encoding (16 cells × 5 states each)
+  const encoding = new Array(80).fill(0);
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const cellIdx = r * 4 + c;
+      const piece = board[r][c].piece;
+
+      if (!piece) {
+        // Empty: encoding[cellIdx*5+0] = 1 (implicit, stay 0)
+      } else {
+        const stateMap = {
+          'red-small': 1,
+          'red-large': 2,
+          'yellow-small': 3,
+          'yellow-large': 4
+        };
+        const state = `${piece.color}-${piece.size}`;
+        encoding[cellIdx * 5 + stateMap[state]] = 1;
+      }
+    }
+  }
+
+  return tf.tensor2d([encoding]); // (1, 80)
+}
+
+function isTerminal(board, stock) {
+  return checkWin('red') || checkWin('yellow') || !hasValidMoves('red') || !hasValidMoves('yellow');
+}
+
 // ── Threat Detection ───────────────────────────────
 function detectThreats(board, stock, opponentColor) {
   const threats = [];
