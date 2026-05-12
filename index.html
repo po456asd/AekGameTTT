@@ -2480,7 +2480,20 @@ function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
     const aRow = a.cell.row, aCol = a.cell.col;
     const bRow = b.cell.row, bCol = b.cell.col;
 
-    // Priority 0: Block opponent threats (highest priority)
+    // Priority 0: Immediate AI wins (highest priority)
+    const aBackup = board[aRow][aCol].piece;
+    board[aRow][aCol].piece = { color: aiColor, size: a.size };
+    const aWins = checkWin(aiColor) ? 1 : 0;
+    board[aRow][aCol].piece = aBackup;
+
+    const bBackup = board[bRow][bCol].piece;
+    board[bRow][bCol].piece = { color: aiColor, size: b.size };
+    const bWins = checkWin(aiColor) ? 1 : 0;
+    board[bRow][bCol].piece = bBackup;
+
+    if (aWins !== bWins) return bWins - aWins;
+
+    // Priority 1: Block opponent threats
     if (threats.length > 0) {
       let aBlocksThreat = false, bBlocksThreat = false;
       for (const threat of threats) {
@@ -2508,19 +2521,6 @@ function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
       // One blocks, one doesn't
       if (aBlocksThreat !== bBlocksThreat) return bBlocksThreat ? 1 : -1;
     }
-
-    // Priority 1: Immediate AI wins
-    const aBackup = board[aRow][aCol].piece;
-    board[aRow][aCol].piece = { color: aiColor, size: a.size };
-    const aWins = checkWin(aiColor) ? 1 : 0;
-    board[aRow][aCol].piece = aBackup;
-
-    const bBackup = board[bRow][bCol].piece;
-    board[bRow][bCol].piece = { color: aiColor, size: b.size };
-    const bWins = checkWin(aiColor) ? 1 : 0;
-    board[bRow][bCol].piece = bBackup;
-
-    if (aWins !== bWins) return bWins - aWins;
 
     // Priority 2: Opponent blocking moves
     const aBlockBackup = board[aRow][aCol].piece;
