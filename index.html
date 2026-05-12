@@ -917,7 +917,7 @@ async function startGame(m) {
   playClick();
   mode = m;
 
-  if (difficulty === 'neural') {
+  if (pcDifficulty === 'neural') {
     if (!neuralNetworkModel) {
       await loadNeuralModel();
     }
@@ -2098,15 +2098,17 @@ async function pcMoveNeural() {
       return;
     }
 
-    // Make the move
-    placepiece(bestMove.cell.row, bestMove.cell.col, bestMove.size);
+    // Make the move - bestMove.cell is cells[r][c] object with .row/.col
+    const cellEl = document.querySelector(`[data-row="${bestMove.cell.row}"][data-col="${bestMove.cell.col}"]`);
+    dropLogic(current, bestMove.size, cellEl);
 
   } catch (err) {
     console.error('Neural AI error:', err);
     // Fallback
-    const moves = generateMoves(cells, stock, current);
+    const moves = getAllMoves(current);
     if (moves.length > 0) {
-      placepiece(moves[0].cell.row, moves[0].cell.col, moves[0].size);
+      const fallbackEl = document.querySelector(`[data-row="${moves[0].cell.row}"][data-col="${moves[0].cell.col}"]`);
+      dropLogic(current, moves[0].size, fallbackEl);
     }
   }
 
@@ -2115,7 +2117,7 @@ async function pcMoveNeural() {
 
 // ── PC Easy ───────────────────────────────────────────
 function pcMove() {
-  if (difficulty === 'neural') {
+  if (pcDifficulty === 'neural') {
     pcMoveNeural();
     return;
   }
@@ -2319,7 +2321,7 @@ async function loadNeuralModel() {
 
   try {
     // Load secondstart (YELLOW) model - AI always uses this when playing as YELLOW (moves second)
-    neuralNetworkModel = await tf.loadGraphModel('models/secondstart_latest/model.json');
+    neuralNetworkModel = await tf.loadLayersModel('models/secondstart_latest/model.json');
     console.log('✓ Loaded YELLOW neural model');
   } catch (err) {
     console.error('Failed to load neural model:', err);
@@ -2847,7 +2849,7 @@ function iterativeDeepen(board, stock, aiColor, difficulty) {
   }
 
   // For DEMON3, pre-sort moves at root for faster pruning
-  if (difficulty === "DEMON3") {
+  if (pcDifficulty === "demon3") {
     moves = rootMoveOrder(moves, board, stock, aiColor);
   } else {
     // DEMON2: Use moveOrder at root with MAX_DEPTH to enable killer moves + threat detection

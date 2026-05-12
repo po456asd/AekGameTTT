@@ -82,11 +82,12 @@ def main():
     secondstart = PolicyValueNetwork().to(device)
     secondstart.color = 'yellow'
 
-    models_dir = Path('training/models')
+    script_dir = Path(__file__).parent
+    models_dir = script_dir / 'models'
     models_dir.mkdir(exist_ok=True)
 
     # Logging
-    log_file = Path('training/training_log.csv')
+    log_file = script_dir / 'training_log.csv'
     with open(log_file, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['generation', 'red_wins', 'yellow_wins', 'draws', 'red_win_rate'])
