@@ -2074,8 +2074,51 @@ function pcNoMoves() {
   saveGameReplay();
 }
 
+// ── PC Neural ─────────────────────────────────────────
+async function pcMoveNeural() {
+  if (!gameActive) return;
+
+  // Use YELLOW (secondstart) model - AI always moves as YELLOW (second player)
+  if (!neuralNetworkModel) {
+    console.error('Neural network model not loaded');
+    pcMove(); // Fallback to DEMON3
+    return;
+  }
+
+  const startTime = Date.now();
+  const timeLimit = 5000; // 5 seconds
+
+  try {
+    // Run MCTS search with YELLOW model
+    const bestMove = await mctsSearch(cells, stock, current, neuralNetworkModel, 200, timeLimit);
+
+    if (!bestMove) {
+      console.error('MCTS returned no move');
+      return;
+    }
+
+    // Make the move
+    placepiece(bestMove.cell.row, bestMove.cell.col, bestMove.size);
+
+  } catch (err) {
+    console.error('Neural AI error:', err);
+    // Fallback
+    const moves = generateMoves(cells, stock, current);
+    if (moves.length > 0) {
+      placepiece(moves[0].cell.row, moves[0].cell.col, moves[0].size);
+    }
+  }
+
+  thinking = false;
+}
+
 // ── PC Easy ───────────────────────────────────────────
 function pcMove() {
+  if (difficulty === 'neural') {
+    pcMoveNeural();
+    return;
+  }
+
   if (pcDifficulty === "demon3") {
     pcMoveDemon3();
   } else {
