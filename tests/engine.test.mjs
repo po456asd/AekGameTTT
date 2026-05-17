@@ -188,3 +188,72 @@ initGame();
 }
 
 console.log('✓ Task 5 passed');
+
+import { applyMove, undoMove } from '../js/engine.js';
+
+// applyMove: stock move — places piece, decrements stock, advances turn, sets bitboard + surface
+initGame();
+{
+  const move = { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 5 }, color: 'red', timestamp: 0 };
+  applyMove(move);
+  assert.equal(state.board[5].length, 1, 'piece placed on cell 5');
+  assert.deepEqual(state.board[5][0], { color: 'red', size: 3 });
+  assert.equal(state.stock.red[3], 2, 'large stock decremented');
+  assert.equal(state.currentTurn, 'yellow', 'turn advanced');
+  // Large at cell 5 → bit (3*16+5) = bit 53
+  assert.equal((state.redMask >> 53n) & 1n, 1n, 'redMask bit 53 set');
+  assert.equal((state.surfaceRed >> 5n) & 1n, 1n, 'surfaceRed bit 5 set');
+}
+
+// applyMove: board move with gobble
+initGame();
+{
+  state.board[5] = [{ color: 'yellow', size: 0 }];
+  state.board[0] = [{ color: 'red',    size: 1 }];
+  [5,0].forEach(c => updateSurfaceCell(c));
+  state.yellowMask |= 1n << BigInt(0 * 16 + 5);
+  state.redMask    |= 1n << BigInt(1 * 16 + 0);
+  state.stock.red[1] = 2;
+
+  const move = { from: { type: 'board', cell: 0, size: 1 }, to: { cell: 5 }, color: 'red', timestamp: 0 };
+  applyMove(move);
+  assert.equal(state.board[5].length, 2, 'gobble: stack depth 2');
+  assert.deepEqual(state.board[5][1], { color: 'red', size: 1 }, 'red small on top');
+  assert.equal(state.board[0].length, 0, 'source cell cleared');
+  assert.equal((state.surfaceRed    >> 5n) & 1n, 1n, 'surfaceRed bit 5 set');
+  assert.equal((state.surfaceYellow >> 5n) & 1n, 0n, 'surfaceYellow bit 5 cleared');
+}
+
+// undoMove: undo stock move restores everything
+initGame();
+{
+  const move = { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 5 }, color: 'red', timestamp: 0 };
+  applyMove(move);
+  undoMove(move);
+  assert.equal(state.board[5].length, 0, 'cell 5 empty after undo');
+  assert.equal(state.stock.red[3], 3, 'large stock restored');
+  assert.equal(state.currentTurn, 'red', 'turn restored');
+  assert.equal(state.redMask, 0n, 'redMask clear');
+  assert.equal(state.surfaceRed, 0n, 'surfaceRed clear');
+}
+
+// undoMove: undo gobble restores gobbled piece
+initGame();
+{
+  state.board[5] = [{ color: 'yellow', size: 0 }];
+  state.board[0] = [{ color: 'red',    size: 1 }];
+  [5,0].forEach(c => updateSurfaceCell(c));
+  state.yellowMask |= 1n << BigInt(0 * 16 + 5);
+  state.redMask    |= 1n << BigInt(1 * 16 + 0);
+  state.stock.red[1] = 2;
+
+  const move = { from: { type: 'board', cell: 0, size: 1 }, to: { cell: 5 }, color: 'red', timestamp: 0 };
+  applyMove(move);
+  undoMove(move);
+  assert.equal(state.board[0].length, 1, 'red piece back on cell 0');
+  assert.equal(state.board[5].length, 1, 'yellow tiny still on cell 5');
+  assert.deepEqual(state.board[5][0], { color: 'yellow', size: 0 }, 'yellow tiny restored');
+  assert.equal((state.surfaceYellow >> 5n) & 1n, 1n, 'surfaceYellow bit 5 restored');
+}
+
+console.log('✓ Task 6 passed');

@@ -146,3 +146,79 @@ export function getValidMoves(color) {
 
   return moves;
 }
+
+/**
+ * Apply a move. Mutates board, stock, bitboards, surface masks, moveLog, currentTurn.
+ * Set move._searchMode = true to skip moveLog append (for AI search).
+ * Stores move._gobbled (the piece that was gobbled) for undoMove.
+ */
+export function applyMove(move) {
+  const { from, to, color } = move;
+  let piece;
+
+  if (from.type === 'stock') {
+    state.stock[color][from.size]--;
+    piece = { color, size: from.size };
+  } else {
+    // Lift piece off source cell
+    piece = state.board[from.cell].pop();
+    const fromBit = 1n << BigInt(piece.size * 16 + from.cell);
+    if (piece.color === 'red') state.redMask    &= ~fromBit;
+    else                        state.yellowMask &= ~fromBit;
+    updateSurfaceCell(from.cell);
+  }
+
+  // Save gobbled piece for undoMove
+  const toStack = state.board[to.cell];
+  move._gobbled = toStack.length > 0 ? toStack[toStack.length - 1] : null;
+
+  // Place on destination
+  toStack.push(piece);
+  const toBit = 1n << BigInt(piece.size * 16 + to.cell);
+  if (piece.color === 'red') state.redMask    |= toBit;
+  else                        state.yellowMask |= toBit;
+  updateSurfaceCell(to.cell);
+
+  state.currentTurn = color === 'red' ? 'yellow' : 'red';
+
+  if (!move._searchMode) {
+    move.timestamp = Date.now() - state.gameStartTime;
+    state.moveLog.push(move);
+  }
+}
+
+/**
+ * Undo a move previously applied with applyMove.
+ * Requires move._gobbled to be populated by applyMove.
+ */
+export function undoMove(move) {
+  const { from, to, color } = move;
+
+  // Remove piece from destination
+  const toStack = state.board[to.cell];
+  const piece   = toStack.pop();
+  const toBit   = 1n << BigInt(piece.size * 16 + to.cell);
+  if (piece.color === 'red') state.redMask    &= ~toBit;
+  else                        state.yellowMask &= ~toBit;
+
+  // Restore bitboard bit for the gobbled piece now re-exposed (it stays in the stack)
+  if (move._gobbled) {
+    const gobBit = 1n << BigInt(move._gobbled.size * 16 + to.cell);
+    if (move._gobbled.color === 'red') state.redMask    |= gobBit;
+    else                                state.yellowMask |= gobBit;
+  }
+  updateSurfaceCell(to.cell);
+
+  // Restore source
+  if (from.type === 'stock') {
+    state.stock[color][from.size]++;
+  } else {
+    state.board[from.cell].push(piece);
+    const fromBit = 1n << BigInt(piece.size * 16 + from.cell);
+    if (piece.color === 'red') state.redMask    |= fromBit;
+    else                        state.yellowMask |= fromBit;
+    updateSurfaceCell(from.cell);
+  }
+
+  state.currentTurn = color;
+}
