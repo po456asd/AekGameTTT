@@ -7,7 +7,7 @@ import {
   flashInvalid, updateTurnIndicator, showWinAnimation, setThinking
 } from './ui.js';
 import { isOnlineAvailable } from './network.js';
-import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON, recordMove } from './replay.js';
+import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON, recordMove, loadReplayViewer, initViewerControls, getReplayData } from './replay.js';
 
 // ── Screen Management ────────────────────────────────────────
 const screens = {
@@ -47,6 +47,7 @@ function boot() {
   document.getElementById('btn-save-replay') ?.addEventListener('click', () => saveReplayJSON());
   document.getElementById('btn-copy-json')   ?.addEventListener('click', () => copyReplayJSON());
 
+  initViewerControls();
   showScreen('modeSelect');
 }
 
@@ -202,7 +203,8 @@ function triggerAI() {
 
 // ── Replay launch ────────────────────────────────────────────
 function openReplayFromCurrentGame() {
-  // implemented in Task 12
+  const data = getReplayData();
+  if (data) loadReplayViewer(data);
   showScreen('replay');
 }
 
