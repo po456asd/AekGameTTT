@@ -9,7 +9,7 @@ import { state } from './engine.js';
  * @param {HTMLElement} container
  * @param {function|null} onCellClick  callback(cellIndex: 0-15)
  */
-export function renderBoard(container, onCellClick = null) {
+export function renderBoard(container, onCellClick = null, onBoardPieceDragStart = null) {
   if (container.children.length !== 16) {
     container.innerHTML = '';
     for (let cell = 0; cell < 16; cell++) {
@@ -28,7 +28,14 @@ export function renderBoard(container, onCellClick = null) {
     if (existing) div.removeChild(existing);
     if (stack.length > 0) {
       const top = stack[stack.length - 1];
-      div.appendChild(makePieceElement(top.color, top.size, null));
+      const pieceEl = makePieceElement(top.color, top.size, null);
+      pieceEl.dataset.fromType = 'board';
+      pieceEl.dataset.fromCell = cell;
+      if (onBoardPieceDragStart) {
+        pieceEl.draggable = true;
+        pieceEl.addEventListener('dragstart', e => onBoardPieceDragStart(cell, e));
+      }
+      div.appendChild(pieceEl);
     }
   }
 }
@@ -41,33 +48,39 @@ export function renderBoard(container, onCellClick = null) {
  * @param {string} yellowId   id of the yellow stock container element
  * @param {function|null} onStockClick  callback(color, size)
  */
-export function renderStock(redId, yellowId, onStockClick = null) {
-  _renderStockPanel(redId,    'red',    onStockClick);
-  _renderStockPanel(yellowId, 'yellow', onStockClick);
+export function renderStock(redId, yellowId, onStockClick = null, onDragStart = null) {
+  _renderStockPanel(redId,    'red',    onStockClick, onDragStart);
+  _renderStockPanel(yellowId, 'yellow', onStockClick, onDragStart);
 }
 
-function _renderStockPanel(panelId, color, onStockClick) {
+function _renderStockPanel(panelId, color, onStockClick, onDragStart) {
   const panel = document.getElementById(panelId);
   if (!panel) return;
   panel.innerHTML = `<div class="stock-label">${color === 'red' ? '🔴 Red' : '🟡 Yellow'}</div>`;
 
-  // Display sizes largest-first (most visually prominent at top)
   for (let size = 3; size >= 0; size--) {
-    const count = state.stock[color][size];
-    const row   = document.createElement('div');
-    row.className = 'stock-size-row';
+    const count    = state.stock[color][size];
+    const depleted = count === 0;
 
-    const icon = makePieceElement(color, size, onStockClick ? () => onStockClick(color, size) : null);
-    icon.classList.add('stock-piece-icon');
-    if (count === 0) icon.classList.add('depleted');
-    row.appendChild(icon);
+    const piece = makePieceElement(color, size,
+      (!depleted && onStockClick) ? () => onStockClick(color, size) : null
+    );
+    piece.dataset.fromType = 'stock';
 
-    const countEl = document.createElement('div');
-    countEl.className = 'stock-count';
-    countEl.textContent = `×${count}`;
-    row.appendChild(countEl);
+    // Count badge inside the piece
+    const badge = document.createElement('span');
+    badge.className = 'stock-count-badge';
+    badge.textContent = count;
+    piece.appendChild(badge);
 
-    panel.appendChild(row);
+    if (depleted) {
+      piece.classList.add('depleted');
+    } else if (onDragStart) {
+      piece.draggable = true;
+      piece.addEventListener('dragstart', e => onDragStart(color, size, e));
+    }
+
+    panel.appendChild(piece);
   }
 }
 
@@ -89,9 +102,9 @@ export function makePieceElement(color, size, onClick) {
 
 export function clearHighlights(boardId = 'board', stockRedId = 'stock-red', stockYellowId = 'stock-yellow') {
   document.getElementById(boardId)?.querySelectorAll('.cell,.piece')
-    .forEach(el => el.classList.remove('valid-target', 'selected'));
+    .forEach(el => el.classList.remove('valid-target', 'selected', 'drag-over'));
   [stockRedId, stockYellowId].forEach(id =>
-    document.getElementById(id)?.querySelectorAll('.stock-piece-icon')
+    document.getElementById(id)?.querySelectorAll('.piece')
       .forEach(el => el.classList.remove('selected'))
   );
 }

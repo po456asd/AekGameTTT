@@ -81,8 +81,9 @@ export function startGame(mode) {
   initGame();
   startRecording(mode, 'perfect');
 
-  renderBoard(document.getElementById('board'), handleCellClick);
-  renderStock('stock-red', 'stock-yellow', handleStockClick);
+  renderBoard(document.getElementById('board'), handleCellClick, handleBoardPieceDragStart);
+  _wireBoardDragEvents();
+  renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
   updateTurnIndicator(state.currentTurn, false);
   showScreen('game');
 
@@ -105,7 +106,7 @@ function handleStockClick(color, size) {
   highlightValidCells(validCells);
 
   const panel = document.getElementById(color === 'red' ? 'stock-red' : 'stock-yellow');
-  panel?.querySelectorAll('.stock-piece-icon').forEach(el => {
+  panel?.querySelectorAll('.piece').forEach(el => {
     if (parseInt(el.dataset.size) === size) el.classList.add('selected');
   });
 }
@@ -113,26 +114,37 @@ function handleStockClick(color, size) {
 function handleCellClick(cell) {
   if (state.gameOver) return;
 
-  // ── No piece selected yet ────────────────────────────────
   if (!ctx.selectedFrom) {
     const stack = state.board[cell];
     if (stack.length === 0) { flashInvalid(cell); return; }
     const top = stack[stack.length - 1];
     if (top.color !== state.currentTurn) { flashInvalid(cell); return; }
     if (ctx.vsAI && top.color === ctx.aiColor) return;
-
     clearHighlights();
     ctx.selectedFrom = { type: 'board', cell, size: top.size, color: top.color };
-
     const validCells = getValidMoves(top.color)
-      .filter(m => m.from.type === 'board' && m.from.cell === cell)
-      .map(m => m.to.cell);
+      .filter(m => m.from.type === 'board' && m.from.cell === cell).map(m => m.to.cell);
     highlightValidCells(validCells);
     document.getElementById('board')?.children[cell]?.querySelector('.piece')?.classList.add('selected');
     return;
   }
 
-  // ── Piece already selected — try to place ────────────────
+  // Re-select another own board piece?
+  const { type, size, color } = ctx.selectedFrom;
+  const allValid = getValidMoves(color).filter(m =>
+    m.from.type === type && m.from.size === size &&
+    (type === 'board' ? m.from.cell === ctx.selectedFrom.cell : true)
+  );
+  if (!allValid.some(m => m.to.cell === cell)) {
+    const stack = state.board[cell];
+    if (stack.length > 0 && stack[stack.length - 1].color === color && type === 'board') {
+      clearHighlights(); ctx.selectedFrom = null; handleCellClick(cell); return;
+    }
+  }
+  executeMoveToCell(cell);
+}
+
+function executeMoveToCell(cell) {
   const { type, size, color } = ctx.selectedFrom;
   const fromCell = ctx.selectedFrom.cell;
 
@@ -141,52 +153,94 @@ function handleCellClick(cell) {
     m.from.size === size &&
     (type === 'board' ? m.from.cell === fromCell : true)
   );
-  const isValid = allValid.some(m => m.to.cell === cell);
-
-  if (!isValid) {
-    // Clicking another own board piece → re-select it instead
-    const stack = state.board[cell];
-    if (stack.length > 0 && stack[stack.length - 1].color === color && type === 'board') {
-      clearHighlights();
-      ctx.selectedFrom = null;
-      handleCellClick(cell);
-      return;
-    }
+  if (!allValid.some(m => m.to.cell === cell)) {
     flashInvalid(cell);
     clearHighlights();
     ctx.selectedFrom = null;
-    return;
+    return false;
   }
 
-  // Execute move
   const move = { from: { type, cell: fromCell, size }, to: { cell }, color, timestamp: 0 };
   clearHighlights();
   ctx.selectedFrom = null;
 
   applyMove(move);
   recordMove(move);
-  renderBoard(document.getElementById('board'), handleCellClick);
+  renderBoard(document.getElementById('board'), handleCellClick, handleBoardPieceDragStart);
   // Animate newly placed piece
-  const _boardEl = document.getElementById('board');
-  const _cellEl  = _boardEl?.children[move.to.cell];
-  const _pieceEl = _cellEl?.querySelector('.piece');
-  if (_pieceEl) {
-    const wasGobble = move._gobbled != null;
-    _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
-    _pieceEl.addEventListener('animationend', () =>
-      _pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true }
+  const pieceEl = document.getElementById('board')?.children[cell]?.querySelector('.piece');
+  if (pieceEl) {
+    pieceEl.classList.add(move._gobbled ? 'anim-gobble-in' : 'anim-place');
+    pieceEl.addEventListener('animationend', () =>
+      pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true }
     );
   }
-  renderStock('stock-red', 'stock-yellow', handleStockClick);
+  renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
 
-  if (checkWin(color)) { endGame(color); return; }
-
+  if (checkWin(color)) { endGame(color); return true; }
   updateTurnIndicator(state.currentTurn, ctx.vsAI && state.currentTurn === ctx.aiColor);
-
   if (ctx.vsAI && state.currentTurn === ctx.aiColor && !state.gameOver) {
     setThinking(ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow', true);
     setTimeout(triggerAI, 50);
   }
+  return true;
+}
+
+function handleStockPieceDragStart(color, size, e) {
+  if (state.gameOver || color !== state.currentTurn) { e.preventDefault(); return; }
+  if (ctx.vsAI && color === ctx.aiColor) { e.preventDefault(); return; }
+  clearHighlights();
+  ctx.selectedFrom = { type: 'stock', cell: null, size, color };
+  highlightValidCells(getValidMoves(color)
+    .filter(m => m.from.type === 'stock' && m.from.size === size).map(m => m.to.cell));
+  e.target.classList.add('selected');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', '');
+}
+
+function handleBoardPieceDragStart(fromCell, e) {
+  if (state.gameOver) { e.preventDefault(); return; }
+  const stack = state.board[fromCell];
+  if (!stack.length) { e.preventDefault(); return; }
+  const top = stack[stack.length - 1];
+  if (top.color !== state.currentTurn) { e.preventDefault(); return; }
+  if (ctx.vsAI && top.color === ctx.aiColor) { e.preventDefault(); return; }
+  clearHighlights();
+  ctx.selectedFrom = { type: 'board', cell: fromCell, size: top.size, color: top.color };
+  highlightValidCells(getValidMoves(top.color)
+    .filter(m => m.from.type === 'board' && m.from.cell === fromCell).map(m => m.to.cell));
+  e.target.classList.add('selected');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', '');
+}
+
+function _wireBoardDragEvents() {
+  const boardEl = document.getElementById('board');
+  if (!boardEl || boardEl._dragWired) return;
+  boardEl._dragWired = true;
+
+  boardEl.addEventListener('dragover', e => {
+    const cellEl = e.target.closest('.cell');
+    if (!cellEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (cellEl.classList.contains('valid-target')) cellEl.classList.add('drag-over');
+  });
+  boardEl.addEventListener('dragleave', e => {
+    const cellEl = e.target.closest('.cell');
+    if (cellEl && !cellEl.contains(e.relatedTarget)) cellEl.classList.remove('drag-over');
+  });
+  boardEl.addEventListener('drop', e => {
+    e.preventDefault();
+    const cellEl = e.target.closest('.cell');
+    if (!cellEl || !ctx.selectedFrom) return;
+    cellEl.classList.remove('drag-over');
+    executeMoveToCell(parseInt(cellEl.dataset.cell));
+  });
+  boardEl.addEventListener('dragend', () => {
+    clearHighlights();
+    if (ctx.selectedFrom) ctx.selectedFrom = null;
+  });
 }
 
 // ── End Game ─────────────────────────────────────────────────
@@ -232,7 +286,7 @@ function _applyAIMove(move) {
   matched._searchMode = false;
   applyMove(matched);
   recordMove(matched);
-  renderBoard(document.getElementById('board'), handleCellClick);
+  renderBoard(document.getElementById('board'), handleCellClick, handleBoardPieceDragStart);
   // Animate newly placed piece
   const _boardEl = document.getElementById('board');
   const _cellEl  = _boardEl?.children[matched.to.cell];
@@ -244,7 +298,7 @@ function _applyAIMove(move) {
       _pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true }
     );
   }
-  renderStock('stock-red', 'stock-yellow', handleStockClick);
+  renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
   if (checkWin(ctx.aiColor)) { endGame(ctx.aiColor); return; }
   updateTurnIndicator(state.currentTurn, false);
 }
