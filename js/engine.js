@@ -103,3 +103,46 @@ export function checkThreats(color, count) {
     return popcount16(surface & mask) >= count;
   });
 }
+
+/**
+ * Returns all valid moves for `color` given current state.
+ * Enforces the Stock Exception Rule: placing a new piece from stock onto an
+ * occupied cell (gobbling) is only legal when the opponent has an active
+ * 3-in-a-row threat on the surface.
+ */
+export function getValidMoves(color) {
+  const moves = [];
+  const oppColor    = color === 'red' ? 'yellow' : 'red';
+  const oppHasThreat = checkThreats(oppColor, 3);
+
+  // ── Stock moves ──────────────────────────────────────────────
+  for (let size = 0; size <= 3; size++) {
+    if (state.stock[color][size] <= 0) continue;
+    for (let cell = 0; cell < 16; cell++) {
+      const stack = state.board[cell];
+      if (stack.length === 0) {
+        // Empty cell: always allowed from stock
+        moves.push({ from: { type: 'stock', cell: null, size }, to: { cell }, color, timestamp: 0 });
+      } else if (canPlace(size, cell, color) && oppHasThreat) {
+        // Gobble from stock: only when opponent has active 3-in-a-row
+        moves.push({ from: { type: 'stock', cell: null, size }, to: { cell }, color, timestamp: 0 });
+      }
+    }
+  }
+
+  // ── Board moves ──────────────────────────────────────────────
+  for (let fromCell = 0; fromCell < 16; fromCell++) {
+    const stack = state.board[fromCell];
+    if (stack.length === 0) continue;
+    const top = stack[stack.length - 1];
+    if (top.color !== color) continue;
+    for (let toCell = 0; toCell < 16; toCell++) {
+      if (fromCell === toCell) continue;
+      if (canPlace(top.size, toCell, color)) {
+        moves.push({ from: { type: 'board', cell: fromCell, size: top.size }, to: { cell: toCell }, color, timestamp: 0 });
+      }
+    }
+  }
+
+  return moves;
+}

@@ -141,3 +141,50 @@ assert.equal(checkThreats('yellow', 3), true,  'yellow 3-in-a-row threat');
 assert.equal(checkThreats('red',    3), false, 'red has no threat when yellow-only');
 
 console.log('✓ Task 4 passed');
+
+import { getValidMoves } from '../js/engine.js';
+
+// Fresh board: red has 4 sizes × 16 cells = 64 stock-to-empty moves
+initGame();
+{
+  const moves = getValidMoves('red');
+  const stockMoves = moves.filter(m => m.from.type === 'stock');
+  assert.equal(stockMoves.length, 4 * 16, '64 stock moves at start');
+  assert.equal(moves.filter(m => m.from.type === 'board').length, 0, 'no board moves at start');
+}
+
+// Stock gobble NOT allowed without opponent threat
+initGame();
+{
+  state.board[5] = [{ color: 'yellow', size: 0 }];
+  updateSurfaceCell(5);
+  state.stock.yellow[0] = 2;
+  const moves = getValidMoves('red');
+  const gobbles = moves.filter(m => m.from.type === 'stock' && m.to.cell === 5);
+  assert.equal(gobbles.length, 0, 'no stock gobble without opponent threat');
+}
+
+// Stock gobble ALLOWED when opponent has 3-in-a-row threat
+initGame();
+{
+  state.board[0] = [{ color: 'yellow', size: 1 }];
+  state.board[1] = [{ color: 'yellow', size: 1 }];
+  state.board[2] = [{ color: 'yellow', size: 1 }];
+  [0,1,2].forEach(c => updateSurfaceCell(c));
+  state.stock.yellow[1] = 0;
+  const moves = getValidMoves('red');
+  const gobbles = moves.filter(m => m.from.type === 'stock' && [0,1,2].includes(m.to.cell));
+  assert.ok(gobbles.length > 0, 'stock gobble allowed when opponent has 3-in-a-row');
+}
+
+// Board moves: red large on cell 0 can move to 15 empty cells
+initGame();
+{
+  state.board[0] = [{ color: 'red', size: 3 }];
+  updateSurfaceCell(0);
+  const moves = getValidMoves('red');
+  const boardMoves = moves.filter(m => m.from.type === 'board');
+  assert.equal(boardMoves.length, 15, 'large can move to 15 empty cells');
+}
+
+console.log('✓ Task 5 passed');
