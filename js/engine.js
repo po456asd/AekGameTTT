@@ -44,3 +44,38 @@ export function initGame() {
   state.gameOver     = false;
   state.winner       = null;
 }
+
+// Count set bits in a 16-bit BigInt (used by checkThreats and AI eval)
+export function popcount16(n) {
+  let count = 0;
+  let m = n & 0xFFFFn;
+  while (m > 0n) { m &= m - 1n; count++; }
+  return count;
+}
+
+/**
+ * Can a piece of `fromSize` (0-3) be placed on `cell` by `currentColor`?
+ * True if: cell is empty, OR fromSize > top.size AND top.color !== currentColor.
+ */
+export function canPlace(fromSize, cell, currentColor) {
+  const stack = state.board[cell];
+  if (stack.length === 0) return true;
+  const top = stack[stack.length - 1];
+  if (top.color === currentColor) return false;
+  return fromSize > top.size;
+}
+
+/**
+ * Recompute the surface-mask bits for a single cell from its current stack top.
+ * Must be called after every push/pop on state.board[cell].
+ */
+export function updateSurfaceCell(cell) {
+  const bit = 1n << BigInt(cell);
+  state.surfaceRed    &= ~bit;
+  state.surfaceYellow &= ~bit;
+  const stack = state.board[cell];
+  if (stack.length === 0) return;
+  const top = stack[stack.length - 1];
+  if (top.color === 'red') state.surfaceRed    |= bit;
+  else                      state.surfaceYellow |= bit;
+}

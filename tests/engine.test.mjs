@@ -41,3 +41,46 @@ assert.deepEqual(state.moveLog, [], 'moveLog empty after initGame');
 assert.ok(typeof state.gameStartTime === 'number' && state.gameStartTime > 0, 'gameStartTime set');
 
 console.log('✓ Task 2 passed');
+
+import { canPlace, updateSurfaceCell, popcount16 } from '../js/engine.js';
+
+// popcount16
+assert.equal(popcount16(0x000Fn), 4, 'row 0 mask has 4 bits');
+assert.equal(popcount16(0x0000n), 0, 'zero has 0 bits');
+assert.equal(popcount16(0x8421n), 4, 'diag1 mask has 4 bits');
+
+// canPlace: empty cell always allowed
+initGame();
+assert.equal(canPlace(0, 5, 'red'), true, 'empty cell: tiny can place');
+
+// canPlace: cannot gobble own piece
+initGame();
+state.board[5] = [{ color: 'red', size: 0 }];
+assert.equal(canPlace(1, 5, 'red'), false, 'cannot gobble own piece');
+
+// canPlace: larger gobbles smaller opponent
+initGame();
+state.board[5] = [{ color: 'yellow', size: 0 }];
+assert.equal(canPlace(1, 5, 'red'), true,  'small gobbles yellow tiny');
+assert.equal(canPlace(0, 5, 'red'), false, 'tiny cannot gobble tiny (equal size)');
+
+// updateSurfaceCell: empty cell clears both surface bits
+initGame();
+updateSurfaceCell(5);
+assert.equal((state.surfaceRed    >> 5n) & 1n, 0n, 'empty: surfaceRed bit 5 clear');
+assert.equal((state.surfaceYellow >> 5n) & 1n, 0n, 'empty: surfaceYellow bit 5 clear');
+
+// updateSurfaceCell: red on top sets surfaceRed bit
+initGame();
+state.board[5] = [{ color: 'red', size: 2 }];
+updateSurfaceCell(5);
+assert.equal((state.surfaceRed    >> 5n) & 1n, 1n, 'red on top → surfaceRed bit 5 set');
+assert.equal((state.surfaceYellow >> 5n) & 1n, 0n, 'red on top → surfaceYellow bit 5 clear');
+
+// updateSurfaceCell: yellow on top
+initGame();
+state.board[7] = [{ color: 'yellow', size: 1 }];
+updateSurfaceCell(7);
+assert.equal((state.surfaceYellow >> 7n) & 1n, 1n, 'yellow on top → surfaceYellow bit 7 set');
+
+console.log('✓ Task 3 passed');
