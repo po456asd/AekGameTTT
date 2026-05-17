@@ -76,6 +76,6 @@ export function updateSurfaceCell(cell) {
   const stack = state.board[cell];
   if (stack.length === 0) return;
   const top = stack[stack.length - 1];
-  if (top.color === 'red') state.surfaceRed    |= bit;
-  else                      state.surfaceYellow |= bit;
+  if (top.color === 'red')         state.surfaceRed    |= bit;
+  else if (top.color === 'yellow') state.surfaceYellow |= bit;
 }

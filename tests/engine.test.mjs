@@ -48,6 +48,9 @@ import { canPlace, updateSurfaceCell, popcount16 } from '../js/engine.js';
 assert.equal(popcount16(0x000Fn), 4, 'row 0 mask has 4 bits');
 assert.equal(popcount16(0x0000n), 0, 'zero has 0 bits');
 assert.equal(popcount16(0x8421n), 4, 'diag1 mask has 4 bits');
+assert.equal(popcount16(0xFFFFn),  16, 'full 16-bit set');
+assert.equal(popcount16(0x8000n),   1, 'high bit only');
+assert.equal(popcount16(0x1FFFFn), 16, 'bits above 15 are truncated');
 
 // canPlace: empty cell always allowed
 initGame();
