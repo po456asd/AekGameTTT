@@ -202,4 +202,10 @@ body {
     flex-direction: row; min-width: unset;
     width: clamp(240px, 90vw, 480px); justify-content: space-around;
   }
+  /* Red (human) at bottom on mobile for ergonomics */
+  #stock-yellow        { order: 1; }
+  #stock-yellow-replay { order: 1; }
+  #board-container, #board-container-replay { order: 2; }
+  #stock-red           { order: 3; }
+  #stock-red-replay    { order: 3; }
 }
