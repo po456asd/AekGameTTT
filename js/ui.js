@@ -113,7 +113,7 @@ export function highlightValidCells(validCells, boardId = 'board') {
   const board = document.getElementById(boardId);
   if (!board) return;
   board.querySelectorAll('.cell').forEach(c => {
-    if (validCells.includes(parseInt(c.dataset.cell))) c.classList.add('valid-target');
+    if (validCells.includes(parseInt(c.dataset.cell, 10))) c.classList.add('valid-target');
   });
 }
 

@@ -107,7 +107,7 @@ function handleStockClick(color, size) {
 
   const panel = document.getElementById(color === 'red' ? 'stock-red' : 'stock-yellow');
   panel?.querySelectorAll('.piece').forEach(el => {
-    if (parseInt(el.dataset.size) === size) el.classList.add('selected');
+    if (parseInt(el.dataset.size, 10) === size) el.classList.add('selected');
   });
 }
 
@@ -193,7 +193,7 @@ function handleStockPieceDragStart(color, size, e) {
   ctx.selectedFrom = { type: 'stock', cell: null, size, color };
   highlightValidCells(getValidMoves(color)
     .filter(m => m.from.type === 'stock' && m.from.size === size).map(m => m.to.cell));
-  e.target.classList.add('selected');
+  e.currentTarget.classList.add('selected');
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', '');
 }
@@ -209,7 +209,7 @@ function handleBoardPieceDragStart(fromCell, e) {
   ctx.selectedFrom = { type: 'board', cell: fromCell, size: top.size, color: top.color };
   highlightValidCells(getValidMoves(top.color)
     .filter(m => m.from.type === 'board' && m.from.cell === fromCell).map(m => m.to.cell));
-  e.target.classList.add('selected');
+  e.currentTarget.classList.add('selected');
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', '');
 }
@@ -224,6 +224,7 @@ function _wireBoardDragEvents() {
     if (!cellEl) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    boardEl.querySelectorAll('.cell.drag-over').forEach(c => { if (c !== cellEl) c.classList.remove('drag-over'); });
     if (cellEl.classList.contains('valid-target')) cellEl.classList.add('drag-over');
   });
   boardEl.addEventListener('dragleave', e => {
@@ -235,7 +236,7 @@ function _wireBoardDragEvents() {
     const cellEl = e.target.closest('.cell');
     if (!cellEl || !ctx.selectedFrom) return;
     cellEl.classList.remove('drag-over');
-    executeMoveToCell(parseInt(cellEl.dataset.cell));
+    executeMoveToCell(parseInt(cellEl.dataset.cell, 10));
   });
   boardEl.addEventListener('dragend', () => {
     clearHighlights();
