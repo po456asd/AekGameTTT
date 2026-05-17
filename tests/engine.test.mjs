@@ -257,3 +257,33 @@ initGame();
 }
 
 console.log('✓ Task 6 passed');
+
+// Integration: red wins on col 0 in 7 moves, then full undo restores clean state
+initGame();
+{
+  const moves = [
+    { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 0  }, color: 'red',    timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 1 }, to: { cell: 1  }, color: 'yellow', timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 4  }, color: 'red',    timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 1 }, to: { cell: 5  }, color: 'yellow', timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 8  }, color: 'red',    timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 1 }, to: { cell: 9  }, color: 'yellow', timestamp: 0 },
+    { from: { type: 'stock', cell: null, size: 3 }, to: { cell: 12 }, color: 'red',    timestamp: 0 },
+  ];
+  for (const m of moves) applyMove(m);
+
+  assert.equal(checkWin('red'),    true,  'red wins on col 0');
+  assert.equal(checkWin('yellow'), false, 'yellow not winning');
+
+  // Full undo
+  for (let i = moves.length - 1; i >= 0; i--) undoMove(moves[i]);
+
+  assert.equal(state.redMask,    0n, 'redMask clear after undo');
+  assert.equal(state.yellowMask, 0n, 'yellowMask clear after undo');
+  assert.deepEqual(state.stock.red,    [3,3,3,3], 'red stock fully restored');
+  assert.deepEqual(state.stock.yellow, [3,3,3,3], 'yellow stock fully restored');
+  assert.equal(state.currentTurn, 'red', 'turn restored to red');
+  assert.ok(state.board.every(s => s.length === 0), 'all stacks empty');
+}
+
+console.log('✓ Task 7 integration passed');
