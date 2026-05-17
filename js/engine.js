@@ -79,3 +79,27 @@ export function updateSurfaceCell(cell) {
   if (top.color === 'red')         state.surfaceRed    |= bit;
   else if (top.color === 'yellow') state.surfaceYellow |= bit;
 }
+
+/**
+ * O(1) win check via 16-bit surface projection.
+ * Returns true if `color` has 4-in-a-row on the visible surface.
+ */
+export function checkWin(color) {
+  const surface = color === 'red' ? state.surfaceRed : state.surfaceYellow;
+  return WIN_MASKS.some(mask => (surface & mask) === mask);
+}
+
+/**
+ * Returns true if `color` has >= `count` pieces in some winning line
+ * with no opponent piece blocking that same line.
+ * Stock Exception Rule check: checkThreats(oppColor, 3).
+ * AI threat detection: checkThreats(color, 3) or checkThreats(color, 2).
+ */
+export function checkThreats(color, count) {
+  const surface    = color === 'red' ? state.surfaceRed    : state.surfaceYellow;
+  const oppSurface = color === 'red' ? state.surfaceYellow : state.surfaceRed;
+  return WIN_MASKS.some(mask => {
+    if ((oppSurface & mask) !== 0n) return false; // opponent blocks this line
+    return popcount16(surface & mask) >= count;
+  });
+}

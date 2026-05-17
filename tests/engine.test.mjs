@@ -87,3 +87,40 @@ updateSurfaceCell(7);
 assert.equal((state.surfaceYellow >> 7n) & 1n, 1n, 'yellow on top → surfaceYellow bit 7 set');
 
 console.log('✓ Task 3 passed');
+
+import { checkWin, checkThreats } from '../js/engine.js';
+
+// checkWin: empty board → no win
+initGame();
+assert.equal(checkWin('red'), false, 'empty board: no win');
+
+// checkWin: red fills row 0 on surface
+initGame();
+state.surfaceRed = 0x000Fn; // bits 0,1,2,3
+assert.equal(checkWin('red'),    true,  'row 0 win for red');
+assert.equal(checkWin('yellow'), false, 'yellow not winning');
+
+// checkWin: diag \ win
+initGame();
+state.surfaceRed = 0x8421n;
+assert.equal(checkWin('red'), true, 'diag \\ win for red');
+
+// checkThreats: red has 3 in row 0 (bits 0,1,2), cell 3 empty, no yellow
+initGame();
+state.surfaceRed    = 0x0007n; // cells 0,1,2
+state.surfaceYellow = 0x0000n;
+assert.equal(checkThreats('red', 3), true, 'red has 3-in-a-row threat on row 0');
+
+// checkThreats: opponent blocks → no threat
+initGame();
+state.surfaceRed    = 0x0007n;
+state.surfaceYellow = 0x0008n; // yellow on cell 3 blocks row 0
+assert.equal(checkThreats('red', 3), false, 'yellow blocks row 0 threat');
+
+// checkThreats: count=2
+initGame();
+state.surfaceRed    = 0x0003n; // cells 0,1
+state.surfaceYellow = 0x0000n;
+assert.equal(checkThreats('red', 2), true, 'red has 2-in-a-row');
+
+console.log('✓ Task 4 passed');
