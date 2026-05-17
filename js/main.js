@@ -2,6 +2,7 @@
 import {
   initGame, state, getValidMoves, applyMove, checkWin, WIN_MASKS
 } from './engine.js';
+import { findBestMove, initTT, getTTBuffer } from './ai.js';
 import {
   renderBoard, renderStock, clearHighlights, highlightValidCells,
   flashInvalid, updateTurnIndicator, showWinAnimation, setThinking
@@ -30,6 +31,23 @@ export const ctx = {
   selectedFrom: null,     // { type, cell, size, color }
 };
 
+// ── Worker / Lazy SMP ────────────────────────────────────────
+let _worker = null;
+let _useWorker = false;
+
+function _initWorker() {
+  try {
+    _worker = new Worker('./js/ai-worker.js', { type: 'module' });
+    const buf = getTTBuffer();
+    if (buf instanceof SharedArrayBuffer) {
+      _worker.postMessage({ type: 'init', payload: { ttBuffer: buf } });
+      _useWorker = true;
+    }
+  } catch {
+    _useWorker = false;
+  }
+}
+
 // ── Boot ─────────────────────────────────────────────────────
 function boot() {
   if (!isOnlineAvailable) {
@@ -48,6 +66,8 @@ function boot() {
   document.getElementById('btn-copy-json')   ?.addEventListener('click', () => copyReplayJSON());
 
   initViewerControls();
+  initTT();
+  _initWorker();
   showScreen('modeSelect');
 }
 
@@ -183,22 +203,48 @@ function endGame(winner) {
   setTimeout(() => showScreen('result'), 900);
 }
 
-// ── AI (stub — replaced in Task 14) ─────────────────────────
-function triggerAI() {
-  // Stub: random move
-  const moves = getValidMoves(ctx.aiColor);
-  if (!moves.length) { endGame(ctx.aiColor === 'red' ? 'yellow' : 'red'); return; }
-  const move = moves[Math.floor(Math.random() * moves.length)];
-  move._searchMode = false;
-
+// ── AI ───────────────────────────────────────────────────────
+function _applyAIMove(move) {
+  if (!move || state.gameOver) return;
   setThinking(ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow', false);
-  applyMove(move);
-  recordMove(move);
+
+  // Re-derive move from current state (validate against current valid moves)
+  const validMoves = getValidMoves(ctx.aiColor);
+  const matched = validMoves.find(m =>
+    m.from.type === move.from.type &&
+    m.from.cell === move.from.cell &&
+    m.from.size === move.from.size &&
+    m.to.cell   === move.to.cell
+  ) ?? validMoves[0]; // fallback to first valid move
+
+  if (!matched) return;
+  matched._searchMode = false;
+  applyMove(matched);
+  recordMove(matched);
   renderBoard(document.getElementById('board'), handleCellClick);
   renderStock('stock-red', 'stock-yellow', handleStockClick);
-
   if (checkWin(ctx.aiColor)) { endGame(ctx.aiColor); return; }
   updateTurnIndicator(state.currentTurn, false);
+}
+
+function triggerAI() {
+  if (_useWorker && _worker) {
+    const snapshot = {
+      boardSnapshot: state.board.map(stk => stk.map(p => ({ ...p }))),
+      stockSnapshot: { red: [...state.stock.red], yellow: [...state.stock.yellow] },
+      currentColor:  ctx.aiColor,
+      seed: Math.random(),
+    };
+    _worker.onmessage = e => {
+      if (e.data.type !== 'result') return;
+      _applyAIMove(e.data.move);
+    };
+    _worker.postMessage({ type: 'search', payload: snapshot });
+  } else {
+    // Fallback: run search on main thread
+    const move = findBestMove(ctx.aiColor, 18, 3000);
+    _applyAIMove(move);
+  }
 }
 
 // ── Replay launch ────────────────────────────────────────────
