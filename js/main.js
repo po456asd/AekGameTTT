@@ -7,7 +7,7 @@ import {
   flashInvalid, updateTurnIndicator, showWinAnimation, setThinking
 } from './ui.js';
 import { isOnlineAvailable } from './network.js';
-import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON } from './replay.js';
+import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON, recordMove } from './replay.js';
 
 // ── Screen Management ────────────────────────────────────────
 const screens = {
@@ -143,6 +143,7 @@ function handleCellClick(cell) {
   ctx.selectedFrom = null;
 
   applyMove(move);
+  recordMove(move);
   renderBoard(document.getElementById('board'), handleCellClick);
   renderStock('stock-red', 'stock-yellow', handleStockClick);
 
@@ -191,6 +192,7 @@ function triggerAI() {
 
   setThinking(ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow', false);
   applyMove(move);
+  recordMove(move);
   renderBoard(document.getElementById('board'), handleCellClick);
   renderStock('stock-red', 'stock-yellow', handleStockClick);
 
