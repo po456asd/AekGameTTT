@@ -123,4 +123,21 @@ state.surfaceRed    = 0x0003n; // cells 0,1
 state.surfaceYellow = 0x0000n;
 assert.equal(checkThreats('red', 2), true, 'red has 2-in-a-row');
 
+// checkWin: column win
+initGame();
+state.surfaceRed = 0x1111n; // col 0: cells 0,4,8,12
+assert.equal(checkWin('red'), true, 'col 0 win for red');
+
+// checkWin: anti-diagonal /
+initGame();
+state.surfaceRed = 0x1248n; // cells 3,6,9,12
+assert.equal(checkWin('red'), true, 'anti-diagonal / win for red');
+
+// checkThreats: yellow branch
+initGame();
+state.surfaceYellow = 0x0007n; // cells 0,1,2
+state.surfaceRed    = 0x0000n;
+assert.equal(checkThreats('yellow', 3), true,  'yellow 3-in-a-row threat');
+assert.equal(checkThreats('red',    3), false, 'red has no threat when yellow-only');
+
 console.log('✓ Task 4 passed');
