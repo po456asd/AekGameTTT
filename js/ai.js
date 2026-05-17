@@ -174,11 +174,16 @@ function moveRank(move, color, opp) {
 }
 
 // ── Quiescence Search ─────────────────────────────────────────
-function quiescence(color, alpha, beta, hash) {
-  // Stand-pat
+const QMAX = 4; // max gobble chain depth — prevents infinite mutual-gobble recursion
+
+function quiescence(color, alpha, beta, hash, qdepth = 0) {
+  // Stand-pat lower bound
   const standPat = evaluate(color);
   if (standPat >= beta) return beta;
   if (standPat > alpha) alpha = standPat;
+
+  // Depth cap: stop searching gobbles, return static eval
+  if (qdepth >= QMAX) return alpha;
 
   const opp = color === 'red' ? 'yellow' : 'red';
   // Only noisy moves: gobbles
@@ -188,7 +193,7 @@ function quiescence(color, alpha, beta, hash) {
     move._searchMode = true;
     applyMove(move);
     if (checkWin(color)) { undoMove(move); return INF; }
-    const score = -quiescence(opp, -beta, -alpha, hash);
+    const score = -quiescence(opp, -beta, -alpha, hash, qdepth + 1);
     undoMove(move);
     if (score >= beta) return beta;
     if (score > alpha) alpha = score;
