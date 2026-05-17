@@ -28,6 +28,11 @@
 ### Stock Exception Rule (tournament rule)
 Placing a **new piece from stock** onto an **occupied cell** (gobbling) is only legal if the opponent currently has an active 3-in-a-row threat on the surface. Stock to empty cell: always allowed.
 
+### Turn Order
+Red always moves first. Yellow moves second. Alternates each turn.  
+In vs AI mode: human = Red (moves first), AI = Yellow (moves second).  
+In Local 2P: Player 1 = Red, Player 2 = Yellow.
+
 ### Win Condition
 4-in-a-row on the **surface layer** only (visible top pieces).  
 10 winning lines: 4 rows + 4 columns + 2 diagonals.
