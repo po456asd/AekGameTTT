@@ -166,6 +166,17 @@ function handleCellClick(cell) {
   applyMove(move);
   recordMove(move);
   renderBoard(document.getElementById('board'), handleCellClick);
+  // Animate newly placed piece
+  const _boardEl = document.getElementById('board');
+  const _cellEl  = _boardEl?.children[move.to.cell];
+  const _pieceEl = _cellEl?.querySelector('.piece');
+  if (_pieceEl) {
+    const wasGobble = move._gobbled != null;
+    _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
+    _pieceEl.addEventListener('animationend', () =>
+      _pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true }
+    );
+  }
   renderStock('stock-red', 'stock-yellow', handleStockClick);
 
   if (checkWin(color)) { endGame(color); return; }
@@ -222,6 +233,17 @@ function _applyAIMove(move) {
   applyMove(matched);
   recordMove(matched);
   renderBoard(document.getElementById('board'), handleCellClick);
+  // Animate newly placed piece
+  const _boardEl = document.getElementById('board');
+  const _cellEl  = _boardEl?.children[matched.to.cell];
+  const _pieceEl = _cellEl?.querySelector('.piece');
+  if (_pieceEl) {
+    const wasGobble = matched._gobbled != null;
+    _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
+    _pieceEl.addEventListener('animationend', () =>
+      _pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true }
+    );
+  }
   renderStock('stock-red', 'stock-yellow', handleStockClick);
   if (checkWin(ctx.aiColor)) { endGame(ctx.aiColor); return; }
   updateTurnIndicator(state.currentTurn, false);
