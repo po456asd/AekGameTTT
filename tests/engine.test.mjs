@@ -18,6 +18,12 @@ assert.equal(WIN_MASKS[8], 0x8421n, 'diag1 mask = 0x8421');
 // Diag /: cells 3,6,9,12 → bits 3,6,9,12 → 0x1248
 assert.equal(WIN_MASKS[9], 0x1248n, 'diag2 mask = 0x1248');
 
+// Additional mask coverage (rows 1-2, cols 1-2)
+assert.equal(WIN_MASKS[1], 0x00F0n, 'row 1 mask = 0x00F0');
+assert.equal(WIN_MASKS[2], 0x0F00n, 'row 2 mask = 0x0F00');
+assert.equal(WIN_MASKS[5], 0x2222n, 'col 1 mask = 0x2222');
+assert.equal(WIN_MASKS[6], 0x4444n, 'col 2 mask = 0x4444');
+
 // initGame: resets all state
 initGame();
 assert.equal(state.board.length, 16, 'board has 16 cells');
@@ -31,5 +37,7 @@ assert.equal(state.surfaceYellow, 0n, 'surfaceYellow clear');
 assert.equal(state.currentTurn, 'red', 'red goes first');
 assert.equal(state.gameOver, false);
 assert.equal(state.winner, null);
+assert.deepEqual(state.moveLog, [], 'moveLog empty after initGame');
+assert.ok(typeof state.gameStartTime === 'number' && state.gameStartTime > 0, 'gameStartTime set');
 
 console.log('✓ Task 2 passed');
