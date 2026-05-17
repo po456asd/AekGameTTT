@@ -2,6 +2,10 @@
 export const SIZES  = { TINY: 0, SMALL: 1, MEDIUM: 2, LARGE: 3 };
 export const COLORS = { RED: 'red', YELLOW: 'yellow' };
 
+// Stride for the implicitly-segmented 64-bit BigInt bitboard.
+// Bit (size * BIT_STRIDE + cell) = 1 means player owns that size at that cell.
+export const BIT_STRIDE = 16;
+
 // 10 pre-computed 16-bit win masks for 4×4 board (row-major cell index = r*4+c)
 // Bit i = cell i is in this winning line
 export const WIN_MASKS = Object.freeze([
@@ -150,7 +154,9 @@ export function getValidMoves(color) {
 /**
  * Apply a move. Mutates board, stock, bitboards, surface masks, moveLog, currentTurn.
  * Set move._searchMode = true to skip moveLog append (for AI search).
- * Stores move._gobbled (the piece that was gobbled) for undoMove.
+ * Stores move._gobbled (the top piece of the destination stack before this move, or null)
+ * for undoMove. Do NOT reuse the same move object across apply/undo cycles without a
+ * paired undo — _gobbled would be overwritten.
  */
 export function applyMove(move) {
   const { from, to, color } = move;
@@ -162,7 +168,7 @@ export function applyMove(move) {
   } else {
     // Lift piece off source cell
     piece = state.board[from.cell].pop();
-    const fromBit = 1n << BigInt(piece.size * 16 + from.cell);
+    const fromBit = 1n << BigInt(piece.size * BIT_STRIDE + from.cell);
     if (piece.color === 'red') state.redMask    &= ~fromBit;
     else                        state.yellowMask &= ~fromBit;
     updateSurfaceCell(from.cell);
@@ -174,7 +180,7 @@ export function applyMove(move) {
 
   // Place on destination
   toStack.push(piece);
-  const toBit = 1n << BigInt(piece.size * 16 + to.cell);
+  const toBit = 1n << BigInt(piece.size * BIT_STRIDE + to.cell);
   if (piece.color === 'red') state.redMask    |= toBit;
   else                        state.yellowMask |= toBit;
   updateSurfaceCell(to.cell);
@@ -189,7 +195,9 @@ export function applyMove(move) {
 
 /**
  * Undo a move previously applied with applyMove.
- * Requires move._gobbled to be populated by applyMove.
+ * Requires move._gobbled to be set by applyMove (undefined means applyMove was never called).
+ * Does NOT pop from moveLog — callers that need UI undo must pop moveLog themselves.
+ * The gobbled piece stays in the destination stack; only its bitboard bit is restored.
  */
 export function undoMove(move) {
   const { from, to, color } = move;
@@ -197,13 +205,13 @@ export function undoMove(move) {
   // Remove piece from destination
   const toStack = state.board[to.cell];
   const piece   = toStack.pop();
-  const toBit   = 1n << BigInt(piece.size * 16 + to.cell);
+  const toBit   = 1n << BigInt(piece.size * BIT_STRIDE + to.cell);
   if (piece.color === 'red') state.redMask    &= ~toBit;
   else                        state.yellowMask &= ~toBit;
 
   // Restore bitboard bit for the gobbled piece now re-exposed (it stays in the stack)
   if (move._gobbled) {
-    const gobBit = 1n << BigInt(move._gobbled.size * 16 + to.cell);
+    const gobBit = 1n << BigInt(move._gobbled.size * BIT_STRIDE + to.cell);
     if (move._gobbled.color === 'red') state.redMask    |= gobBit;
     else                                state.yellowMask |= gobBit;
   }
@@ -214,7 +222,7 @@ export function undoMove(move) {
     state.stock[color][from.size]++;
   } else {
     state.board[from.cell].push(piece);
-    const fromBit = 1n << BigInt(piece.size * 16 + from.cell);
+    const fromBit = 1n << BigInt(piece.size * BIT_STRIDE + from.cell);
     if (piece.color === 'red') state.redMask    |= fromBit;
     else                        state.yellowMask |= fromBit;
     updateSurfaceCell(from.cell);
