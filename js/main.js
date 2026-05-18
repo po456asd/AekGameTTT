@@ -316,13 +316,19 @@ function _applyAIMove(move) {
   if (!matched) return;
   matched._searchMode = false;
 
-  // Capture stock piece rect BEFORE applyMove/renderStock (DOM still shows old state)
-  let stockSrcRect = null;
+  // Capture source rect BEFORE applyMove/renderBoard (DOM still shows old state)
+  let pieceSrcRect = null;
   if (matched.from.type === 'stock') {
-    const panelId   = ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow';
+    const panelId    = ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow';
     const stockPiece = document.getElementById(panelId)
       ?.querySelector(`.piece[data-size="${matched.from.size}"]`);
-    if (stockPiece) stockSrcRect = stockPiece.getBoundingClientRect();
+    if (stockPiece) pieceSrcRect = stockPiece.getBoundingClientRect();
+  } else {
+    // Board move: capture source cell's piece before it disappears
+    const boardEl   = document.getElementById('board');
+    const srcCellEl = boardEl?.children[matched.from.cell];
+    const srcPiece  = srcCellEl?.querySelector('.piece');
+    if (srcPiece) pieceSrcRect = srcPiece.getBoundingClientRect();
   }
 
   applyMove(matched);
@@ -334,12 +340,12 @@ function _applyAIMove(move) {
   const _pieceEl = _cellEl?.querySelector('.piece');
   const wasGobble = matched._gobbled != null;
 
-  if (stockSrcRect && _pieceEl) {
-    // Stock move: fly clone from stock → board, reveal piece on arrival
+  if (pieceSrcRect && _pieceEl) {
+    // Fly clone from source (stock or board) → destination cell
     const dstRect = _pieceEl.getBoundingClientRect();
     _pieceEl.style.opacity = '0';
     renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
-    _flyClone(ctx.aiColor, matched.from.size, stockSrcRect, dstRect, () => {
+    _flyClone(ctx.aiColor, matched.from.size, pieceSrcRect, dstRect, () => {
       _pieceEl.style.opacity = '';
       _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
       _pieceEl.addEventListener('animationend', () =>
@@ -347,7 +353,6 @@ function _applyAIMove(move) {
       );
     });
   } else {
-    // Board move: regular place/gobble animation
     if (_pieceEl) {
       _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
       _pieceEl.addEventListener('animationend', () =>
