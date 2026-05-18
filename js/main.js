@@ -31,6 +31,11 @@ export const ctx = {
   selectedFrom: null,     // { type, cell, size, color }
 };
 
+// ── Touch Drag State ─────────────────────────────────────────
+let _touchOrigin   = null; // { x, y, type, color, size, fromCell, srcEl }
+let _touchDragging = false;
+let _touchCloneEl  = null;
+
 // ── Worker / Lazy SMP ────────────────────────────────────────
 let _worker = null;
 let _useWorker = false;
@@ -83,6 +88,7 @@ export function startGame(mode) {
 
   renderBoard(document.getElementById('board'), handleCellClick, handleBoardPieceDragStart);
   _wireBoardDragEvents();
+  _wireTouchEvents();
   renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
   updateTurnIndicator(state.currentTurn, false);
   showScreen('game');
@@ -244,6 +250,133 @@ function _wireBoardDragEvents() {
   });
 }
 
+function _startTouchDrag(type, color, size, fromCell, srcEl) {
+  if (state.gameOver) return;
+  if (color !== state.currentTurn) return;
+  if (ctx.vsAI && color === ctx.aiColor) return;
+  if (type === 'stock' && state.stock[color][size] === 0) return;
+  if (type === 'board') {
+    const stack = state.board[fromCell];
+    if (!stack.length || stack[stack.length - 1].color !== color) return;
+  }
+
+  clearHighlights();
+  if (type === 'stock') {
+    ctx.selectedFrom = { type: 'stock', cell: null, size, color };
+    highlightValidCells(getValidMoves(color)
+      .filter(m => m.from.type === 'stock' && m.from.size === size).map(m => m.to.cell));
+  } else {
+    const stack = state.board[fromCell];
+    const top   = stack[stack.length - 1];
+    ctx.selectedFrom = { type: 'board', cell: fromCell, size: top.size, color: top.color };
+    highlightValidCells(getValidMoves(color)
+      .filter(m => m.from.type === 'board' && m.from.cell === fromCell).map(m => m.to.cell));
+  }
+
+  if (srcEl) {
+    const r = srcEl.getBoundingClientRect();
+    _touchCloneEl = document.createElement('div');
+    _touchCloneEl.className = 'piece';
+    _touchCloneEl.dataset.color = color;
+    _touchCloneEl.dataset.size  = size;
+    Object.assign(_touchCloneEl.style, {
+      position: 'fixed',
+      left: `${r.left}px`,
+      top:  `${r.top}px`,
+      pointerEvents: 'none',
+      zIndex: '9999',
+      opacity: '0.9',
+    });
+    document.body.appendChild(_touchCloneEl);
+  }
+}
+
+function _onDocTouchMove(e) {
+  if (!_touchOrigin) return;
+  const touch = e.touches[0];
+  const dx = touch.clientX - _touchOrigin.x;
+  const dy = touch.clientY - _touchOrigin.y;
+
+  if (!_touchDragging && Math.hypot(dx, dy) > 10) {
+    _touchDragging = true;
+    const { type, color, size, fromCell, srcEl } = _touchOrigin;
+    _startTouchDrag(type, color, size, fromCell, srcEl);
+  }
+
+  if (_touchDragging) {
+    e.preventDefault(); // prevent page scroll while dragging
+    if (_touchCloneEl) {
+      const w = _touchCloneEl.offsetWidth;
+      const h = _touchCloneEl.offsetHeight;
+      _touchCloneEl.style.left = `${touch.clientX - w / 2}px`;
+      _touchCloneEl.style.top  = `${touch.clientY - h / 2}px`;
+    }
+    const boardEl = document.getElementById('board');
+    boardEl?.querySelectorAll('.cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+    const underEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cellEl  = underEl?.closest?.('.cell');
+    if (cellEl?.classList.contains('valid-target')) cellEl.classList.add('drag-over');
+  }
+}
+
+function _onDocTouchEnd(e) {
+  if (!_touchOrigin) return;
+  const touch = e.changedTouches[0];
+
+  _touchCloneEl?.remove();
+  _touchCloneEl = null;
+  document.getElementById('board')?.querySelectorAll('.cell.drag-over')
+    .forEach(c => c.classList.remove('drag-over'));
+
+  if (_touchDragging && ctx.selectedFrom) {
+    const underEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cellEl  = underEl?.closest?.('.cell');
+    if (cellEl) {
+      executeMoveToCell(parseInt(cellEl.dataset.cell, 10));
+    } else {
+      clearHighlights();
+      ctx.selectedFrom = null;
+    }
+  }
+
+  _touchOrigin   = null;
+  _touchDragging = false;
+}
+
+function _wireTouchEvents() {
+  if (document._touchWired) return;
+  document._touchWired = true;
+  document.addEventListener('touchmove', _onDocTouchMove, { passive: false });
+  document.addEventListener('touchend',  _onDocTouchEnd);
+
+  const boardEl = document.getElementById('board');
+  if (boardEl) {
+    boardEl.addEventListener('touchstart', e => {
+      const pieceEl = e.target.closest('.piece[data-from-type="board"]');
+      if (!pieceEl) return;
+      const fromCell = parseInt(pieceEl.dataset.fromCell, 10);
+      const stack    = state.board[fromCell];
+      if (!stack.length) return;
+      const top = stack[stack.length - 1];
+      _touchOrigin = { x: e.touches[0].clientX, y: e.touches[0].clientY,
+        type: 'board', color: top.color, size: top.size, fromCell, srcEl: pieceEl };
+    }, { passive: true });
+  }
+
+  ['stock-red', 'stock-yellow'].forEach(panelId => {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    panel.addEventListener('touchstart', e => {
+      const pieceEl = e.target.closest('.piece[data-from-type="stock"]');
+      if (!pieceEl) return;
+      const color = pieceEl.dataset.color;
+      const size  = parseInt(pieceEl.dataset.size, 10);
+      _touchOrigin = { x: e.touches[0].clientX, y: e.touches[0].clientY,
+        type: 'stock', color, size, fromCell: null, srcEl: pieceEl };
+    }, { passive: true });
+  });
+}
+
 // ── End Game ─────────────────────────────────────────────────
 function endGame(winner) {
   state.gameOver = true;
@@ -266,7 +399,10 @@ function endGame(winner) {
     el.textContent = `${winner === 'red' ? '🔴 Red' : '🟡 Yellow'} wins!`;
     el.style.color = winner === 'red' ? '#ff6b6b' : '#ffe082';
   }
-  setTimeout(() => showScreen('result'), 900);
+  setTimeout(() => {
+    // Show overlay without hiding the game board behind it
+    document.getElementById('screen-result')?.classList.add('active');
+  }, 900);
 }
 
 // ── AI ───────────────────────────────────────────────────────
