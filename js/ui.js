@@ -23,6 +23,7 @@ export function renderBoard(container, onCellClick = null, onBoardPieceDragStart
   for (let cell = 0; cell < 16; cell++) {
     const div   = container.children[cell];
     const stack = state.board[cell];
+    div.classList.remove('win-cell');
     div.dataset.depth = stack.length;
     const existing = div.querySelector('.piece');
     if (existing) div.removeChild(existing);
