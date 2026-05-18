@@ -149,20 +149,52 @@ body {
   pointer-events: none;
 }
 
-/* Count badge centered inside the piece */
+/* Tile container: neutral bg — icon drawn via ::after */
+.stock-panel .piece[data-color="red"],
+.stock-panel .piece[data-color="yellow"] {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+.stock-panel .piece:not(.depleted):hover {
+  transform: none !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.28) !important;
+}
+
+/* ::after icon — size-proportional colored piece shape */
+.stock-panel .piece::after {
+  content: '';
+  position: absolute;
+  border-radius: 22%;
+  border: 2px solid #222;
+  left: 50%;
+  transform: translateX(-50%);
+}
+/* per-size: icon centered in top 44px of the 68px tile */
+.stock-panel .piece[data-size="0"]::after { width: 10px; height: 10px; top: 17px; }
+.stock-panel .piece[data-size="1"]::after { width: 20px; height: 20px; top: 12px; }
+.stock-panel .piece[data-size="2"]::after { width: 32px; height: 32px; top:  6px; }
+.stock-panel .piece[data-size="3"]::after { width: 44px; height: 44px; top:  0px; }
+/* per-color: fill + glow */
+.stock-panel .piece[data-color="red"]::after    { background: #e74c3c; box-shadow: 0 3px 8px rgba(231,76,60,0.5); }
+.stock-panel .piece[data-color="yellow"]::after { background: #f1c40f; box-shadow: 0 3px 8px rgba(241,196,15,0.5); }
+.stock-panel .piece.depleted::after             { background: #555 !important; box-shadow: none !important; }
+
+/* Count badge pinned to bottom of tile */
 .stock-count-badge {
   position: absolute;
-  inset: 0;
+  bottom: 4px; top: auto; left: 0; right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 1px;
-  font-size: 0.6rem;
+  justify-content: flex-end;
+  gap: 0;
+  font-size: 0.55rem;
   font-weight: 900;
   line-height: 1.2;
   color: rgba(255,255,255,0.95);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
   pointer-events: none;
   user-select: none;
 }
@@ -217,6 +249,11 @@ body {
   .piece[data-size="3"] { width: clamp(46px, calc(90vw /  6.5), 82px); height: clamp(46px, calc(90vw /  6.5), 82px); }
   .stock-panel .piece   { width: clamp(52px, calc(90vw / 6), 68px) !important; height: clamp(52px, calc(90vw / 6), 68px) !important; }
   .stock-count-badge { font-size: 0.5rem; }
+  /* Mobile: scale ::after icons to fit smaller tile */
+  .stock-panel .piece[data-size="3"]::after { width: 30px; height: 30px; top: 0; }
+  .stock-panel .piece[data-size="2"]::after { width: 22px; height: 22px; top: 5px; }
+  .stock-panel .piece[data-size="1"]::after { width: 14px; height: 14px; top: 9px; }
+  .stock-panel .piece[data-size="0"]::after { width:  8px; height:  8px; top: 12px; }
   /* Red (human) at bottom on mobile for ergonomics */
   #stock-yellow        { order: 1; }
   #stock-yellow-replay { order: 1; }
