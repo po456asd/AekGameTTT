@@ -14,7 +14,6 @@ import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON, recordM
 const screens = {
   modeSelect: document.getElementById('screen-mode-select'),
   game:       document.getElementById('screen-game'),
-  result:     document.getElementById('screen-result'),
   replay:     document.getElementById('screen-replay'),
 };
 
@@ -88,6 +87,10 @@ export function startGame(mode) {
 
   initGame();
   startRecording(mode, 'perfect');
+
+  // Reset result inline (hidden → show turn indicator again)
+  document.getElementById('result-inline').hidden  = true;
+  document.getElementById('turn-indicator').hidden = false;
 
   renderBoard(document.getElementById('board'), handleCellClick, handleBoardPieceDragStart);
   _wireBoardDragEvents();
@@ -403,9 +406,9 @@ function endGame(winner) {
     el.style.color = winner === 'red' ? '#ff6b6b' : '#ffe082';
   }
   setTimeout(() => {
-    // Show overlay without hiding the game board behind it
-    document.getElementById('screen-result')?.classList.add('active');
-  }, 900);
+    document.getElementById('turn-indicator').hidden = true;
+    document.getElementById('result-inline').hidden  = false;
+  }, 2000);
 }
 
 // ── AI ───────────────────────────────────────────────────────
