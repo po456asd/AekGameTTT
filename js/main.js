@@ -43,6 +43,9 @@ let _useWorker = false;
 function _initWorker() {
   try {
     _worker = new Worker('./js/ai-worker.js', { type: 'module' });
+    // Silently fall back to main-thread AI if worker fails to load
+    // (common on file:// or browsers blocking module workers)
+    _worker.onerror = () => { _useWorker = false; _worker = null; };
     const buf = getTTBuffer();
     if (buf instanceof SharedArrayBuffer) {
       _worker.postMessage({ type: 'init', payload: { ttBuffer: buf } });

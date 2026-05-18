@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gobblet</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- SharedArrayBuffer requires cross-origin isolation headers (COOP/COEP).
-       For GitHub Pages add: <script src="coi-serviceworker.js"></script> -->
+  <!-- Enables SharedArrayBuffer on GitHub Pages (COOP/COEP via Service Worker).
+       Silently no-ops on file:// or browsers without SW support. -->
+  <script src="coi-serviceworker.js"></script>
 </head>
 <body>
 

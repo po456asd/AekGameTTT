@@ -1,0 +1,15 @@
+# v1 large/generated files — keep index.html and ai_model_dual only
+gobbletv1/node_modules/
+gobbletv1/__pycache__/
+gobbletv1/training/
+gobbletv1/ai_model_medium/
+gobbletv1/ai_model_savedmodel/
+gobbletv1/ai_model_savedmodel_keras/
+gobbletv1/docs/
+gobbletv1/*.mp3
+gobbletv1/*.log
+
+# v2 dev artifacts
+docs/superpowers/
+.claude/
+.omc/

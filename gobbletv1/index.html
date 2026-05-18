@@ -1,0 +1,2981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Gobble Bingo 4x4</title>
+<script>
+// WebRTC + Signaling setup
+let ws = null;
+let peerConnection = null;
+let dataChannel = null;
+let roomId = null;
+let isInitiator = false;
+
+function initWebSocket() {
+  ws = new WebSocket('ws://localhost:8001');
+  ws.onopen = () => console.log('Connected to signaling server');
+  ws.onmessage = (event) => handleSignalingMessage(JSON.parse(event.data));
+  ws.onerror = (err) => console.error('WebSocket error:', err);
+  ws.onclose = () => console.log('Disconnected from signaling server');
+}
+
+function createPeerConnection() {
+  peerConnection = new RTCPeerConnection({
+    iceServers: [
+      { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+      { urls: ["stun:stun.cloudflare.com:3478"] },
+      { urls: ["turn:openrelay.metered.ca:80"], username: "openrelayproject", credential: "openrelayproject" },
+      { urls: ["turn:openrelay.metered.ca:443"], username: "openrelayproject", credential: "openrelayproject" }
+    ]
+  });
+
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ice-candidate', candidate: event.candidate }));
+    }
+  };
+
+  peerConnection.onconnectionstatechange = () => {
+    console.log('Connection state:', peerConnection.connectionState);
+  };
+}
+
+async function handleSignalingMessage(msg) {
+  try {
+    if (msg.type === 'peer-joined') {
+      if (isInitiator) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: 'offer', offer }));
+      }
+    }
+    else if (msg.type === 'offer') {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: 'answer', answer }));
+    }
+    else if (msg.type === 'answer') {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(msg.answer));
+    }
+    else if (msg.type === 'ice-candidate' && msg.candidate) {
+      try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      } catch (err) {
+        console.error('ICE candidate error:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Signaling error:', err);
+  }
+}
+
+initWebSocket();
+</script>
+<style>
+:root {
+  --bg: #111;
+  --text: #fff;
+  --cell-bg: #333;
+  --cell-border: #555;
+  --stock-border: #555;
+  --stock-item-border: #444;
+  --glow-color-dim: rgba(255,255,255,0.15);
+  --glow-color-bright: rgba(255,255,255,0.35);
+}
+
+html.light {
+  --bg: #f5f5f5;
+  --text: #222;
+  --cell-bg: #ddd;
+  --cell-border: #999;
+  --stock-border: #bbb;
+  --stock-item-border: #ccc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: monospace;
+  text-align: center;
+  padding: 12px;
+  transition: background 0.3s, color 0.3s;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+h2 { margin: 0; font-size: clamp(14px, 4vw, 20px); }
+
+.theme-toggle {
+  padding: 6px 12px;
+  cursor: pointer;
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  color: var(--text);
+  border-radius: 4px;
+}
+
+.theme-toggle:hover { opacity: 0.8; }
+
+button {
+  margin: 4px;
+  padding: 8px 14px;
+  font-size: 14px;
+  background: var(--cell-bg);
+  color: var(--text);
+  border: 1px solid var(--cell-border);
+  cursor: pointer;
+  border-radius: 4px;
+  touch-action: manipulation;
+  transition: all 0.1s ease;
+}
+
+button:hover { opacity: 0.8; }
+button:active { transform: scale(0.95); }
+button:focus { outline: 2px solid var(--text); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#menu { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#difficultyMenu { display: none; flex-direction: column; align-items: center; gap: 8px; }
+#game { display: none; flex-direction: row; justify-content: center; gap: 12px; margin-top: 10px; align-items: center; }
+#status { margin: 8px 0; font-size: 15px; min-height: 20px; }
+
+#board {
+  display: grid;
+  gap: 5px;
+  flex-shrink: 0;
+  animation: boardBreathing 3s ease-in-out infinite;
+}
+
+.cell {
+  width: 60px;
+  height: 60px;
+  background: var(--cell-bg);
+  border: 3px solid var(--cell-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  transition: background 0.15s;
+}
+
+.cell.drop-target { border-color: #aaa; background: rgba(255,255,255,0.1); }
+
+.piece {
+  image-rendering: pixelated;
+  border-radius: 4px;
+  touch-action: none;
+  pointer-events: none;
+}
+
+.piece.place-anim {
+  animation: placePiece 0.4s ease-out;
+}
+
+@keyframes placePiece {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.small { width: 20px; height: 20px; }
+.large { width: 50px; height: 50px; }
+
+.red    { background: #ff4444; }
+.blue   { background: #4488ff; }
+.yellow { background: #ffdd33; }
+
+.stock {
+  border: 2px solid var(--stock-border);
+  padding: 6px;
+  width: 100px;
+  flex-shrink: 0;
+  transition: box-shadow 0.3s ease, opacity 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.4;
+}
+
+.stock.active {
+  opacity: 1;
+}
+
+.stock.active {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+.stock.red.active {
+  box-shadow: 0 0 20px rgba(255, 68, 68, 0.6), inset 0 0 15px rgba(255, 68, 68, 0.2);
+}
+
+.stock.blue.active {
+  box-shadow: 0 0 20px rgba(68, 136, 255, 0.6), inset 0 0 15px rgba(68, 136, 255, 0.2);
+}
+
+.stock.yellow.active {
+  box-shadow: 0 0 20px rgba(255, 221, 51, 0.6), inset 0 0 15px rgba(255, 221, 51, 0.2);
+}
+
+.stockItem {
+  margin: 5px;
+  padding: 6px 4px;
+  border: 1px solid var(--stock-item-border);
+  background: var(--cell-bg);
+  border-radius: 4px;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.stockItem:active {
+  cursor: grabbing;
+}
+
+.stockItem .piece {
+  display: inline-block;
+  pointer-events: none;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.diff-desc {
+  font-size: 11px;
+  opacity: 0.7;
+  margin: 4px 0 10px 0;
+}
+
+/* Touch ghost piece */
+#touchGhost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.8;
+  transform: translate(-50%, -50%) scale(1.3);
+  display: none;
+  border-radius: 4px;
+}
+
+.loading {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--cell-border);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes explosion {
+  0% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0 rgba(255,200,0,0.8)); }
+  50% { transform: scale(1.3); filter: drop-shadow(0 0 20px rgba(255,200,0,1)); }
+  100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0 rgba(255,200,0,0)); }
+}
+
+@keyframes boardShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+  20%, 40%, 60%, 80% { transform: translateX(3px); }
+}
+
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(255,255,255,0.5)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255,255,255,0.9)); }
+}
+
+@keyframes piece-fly {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(1); }
+}
+
+@keyframes liftStock {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-8px) scale(1.05); }
+}
+
+.stockItem.lifting {
+  animation: liftStock 0.2s ease-out forwards;
+}
+
+@keyframes breathingGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,255,255,0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255,255,255,0.8)); }
+}
+
+@keyframes boardBreathing {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--glow-color-dim)); }
+  50% { filter: drop-shadow(0 0 8px var(--glow-color-bright)); }
+}
+
+@keyframes morphIn {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+#menu.morph, #difficultyMenu.morph {
+  animation: morphIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#menu button, #difficultyMenu button {
+  animation: breathingGlow 3s ease-in-out infinite;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.75);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal.active { display: flex; }
+
+.modal-content {
+  background: var(--cell-bg);
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid var(--cell-border);
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  color: var(--text);
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin: 8px 0;
+  font-family: monospace;
+  border: 1px solid var(--cell-border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  body { padding: 8px; }
+  .header { margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  h2 { font-size: clamp(14px, 3vw, 18px); }
+  button { min-height: 44px; min-width: 44px; padding: 10px 12px; font-size: 13px; margin: 3px; }
+  #menu, #difficultyMenu { gap: 6px; }
+  #game { flex-direction: column; gap: 6px; }
+  #board { order: 2; }
+  #leftStock { order: 3; width: 100%; flex-direction: row; justify-content: center; padding: 4px; }
+  #rightStock { order: 1; width: 100%; flex-direction: row; justify-content: center; padding: 4px; }
+  .stock { width: auto; padding: 4px; }
+  .stockItem { margin: 2px; padding: 4px 3px; font-size: 12px; width: 50px; min-height: 50px; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; gap: 2px; }
+  .piece { pointer-events: auto; }
+  .small { width: 18px; height: 18px; }
+  .large { width: 28px; height: 28px; }
+  .controls { gap: 6px; margin-top: 8px; }
+  .diff-desc { font-size: 10px; margin: 3px 0 8px 0; }
+}
+
+@media (max-width: 480px) {
+  body { padding: 6px; }
+  .cell { width: 52px; height: 52px; }
+  .large { width: 44px; height: 44px; }
+  .small { width: 18px; height: 18px; }
+  #game { gap: 4px; }
+  #leftStock { width: 100%; flex-direction: row; justify-content: center; padding: 3px; }
+  #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 3px; }
+  .stock { width: auto; padding: 3px; }
+  .stockItem { width: 48px; min-height: 48px; }
+  .small { width: 16px; height: 16px; }
+  .large { width: 26px; height: 26px; }
+  h2 { font-size: 14px; }
+  button { padding: 8px 10px; font-size: 12px; }
+  .modal-content { width: 95%; padding: 15px; }
+  .modal-content input { padding: 6px; font-size: 13px; }
+}
+
+@media (max-width: 380px) {
+  body { padding: 4px; }
+  .cell { width: 44px; height: 44px; }
+  .large { width: 38px; height: 38px; }
+  .small { width: 16px; height: 16px; }
+  #leftStock { width: 100%; flex-direction: row; justify-content: center; padding: 2px; }
+  #rightStock { width: 100%; flex-direction: row; justify-content: center; padding: 2px; }
+  .stock { width: auto; padding: 2px; }
+  .stockItem { width: 44px; min-height: 44px; }
+  .small { width: 14px; height: 14px; }
+  .large { width: 24px; height: 24px; }
+  h2 { font-size: 13px; }
+  button { padding: 6px 8px; font-size: 11px; margin: 2px; }
+  #menu { gap: 4px; }
+  #game { gap: 3px; }
+  .piece { border-radius: 2px; }
+  .cell { border: 2px solid var(--cell-border); }
+  .diff-desc { font-size: 9px; }
+  .modal-content { width: 98%; padding: 12px; }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(400px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(400px); opacity: 0; }
+}
+
+.thinking-progress {
+  width: 200px;
+  height: 3px;
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.thinking-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4488ff, #ffdd33);
+  width: 0%;
+  animation: fillBar 10s linear forwards;
+}
+
+@keyframes fillBar {
+  to { width: 100%; }
+}
+
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+</head>
+<body>
+
+<div class="header">
+  <h2>Gobble Bingo 4x4<br></h2>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div id="musicPlayer" style="display:flex;gap:4px;align-items:center;padding:4px 8px;background:var(--cell-bg);border:1px solid var(--cell-border);border-radius:4px;">
+      <button id="musicToggle" onclick="toggleMusic()" style="margin:0;padding:4px 8px;font-size:12px;" title="Play/Pause music">🎵</button>
+      <input id="volumeSlider" type="range" min="0" max="100" value="50" onchange="setMusicVolume(this.value)" style="width:60px;cursor:pointer;" title="Volume">
+      <button id="loopToggle" onclick="toggleLoop()" style="margin:0;padding:4px 8px;font-size:12px;" title="Loop music">🔁</button>
+    </div>
+    <button class="theme-toggle" id="soundToggle" onclick="toggleSound()" title="Toggle sound">🔊</button>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+  </div>
+</div>
+
+<audio id="bgMusic" style="display:none;" src="Tetris%2099%20-%20Main%20Theme.mp3" autoplay></audio>
+
+<div id="menu">
+  <button onclick="startGame('pvp')">👥 PvP Local</button>
+  <button onclick="showDifficultyMenu()">🤖 Vs PC</button>
+  <button onclick="showP2PMenu()">🌐 Online P2P</button>
+  <button onclick="showReplayMenu()" style="margin-top:10px;">📼 Replays</button>
+</div>
+
+<div id="replayMenu" style="display:none;">
+  <h3 style="margin:0 0 15px 0;">📼 Load Replay</h3>
+
+  <!-- Saved replays list -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Saved Replays:</p>
+    <div id="replayMenuList" style="max-height:150px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:3px; margin-bottom:8px; background:var(--cell-bg);"></div>
+    <button onclick="wipeAllReplays()" style="width:100%; background:#c44; margin-bottom:8px;">🗑 Wipe All</button>
+  </div>
+
+  <!-- Import file -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Import from file:</p>
+    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px; width:100%; margin-bottom:5px;">
+    <button onclick="importReplayFromFile()" style="width:100%;">📥 Import</button>
+  </div>
+
+  <!-- Paste share link -->
+  <div style="margin-bottom:15px;">
+    <p style="margin:0 0 5px 0;">Or paste share link:</p>
+    <textarea id="replayPasteInput" placeholder="Paste replay link or JSON here" style="width:100%; height:60px; padding:5px; font-family:monospace; font-size:12px; border:1px solid #555; border-radius:3px; background:var(--cell-bg); color:var(--text);"></textarea>
+    <button onclick="loadReplayFromInput()" style="width:100%; margin-top:5px;">Load Replay</button>
+  </div>
+
+  <button onclick="hideReplayMenu()" style="width:100%;">↩ Back</button>
+</div>
+
+<div id="difficultyMenu">
+  <p>Select Difficulty:</p>
+  <button onclick="startPCGame('easy')" style="display:none;">😊 Easy</button>
+  <button onclick="startPCGame('normal')" style="display:none;">🤔 Normal</button>
+  <button onclick="startPCGame('hell')" style="display:none;">😈 Hell</button>
+  <button onclick="startPCGame('demon')" style="display:none;">👿 DEMON</button>
+  <button onclick="startPCGame('demon2')">💀 DEMON 2</button>
+  <button onclick="startPCGame('demon3')">☠️ DEMON 3</button>
+  <button onclick="startPCGame('neural-ai-first')">🧠 NEURAL|AI First</button>
+  <button onclick="startPCGame('neural-ai-second')">🧠 NEURAL|AI Second</button>
+  <div class="diff-desc">DEMON 2: MCTS · DEMON 3: deeper search · NEURAL|AI First: AI starts · NEURAL|AI Second: player starts</div>
+  <button onclick="hideDifficultyMenu()">↩ Back</button>
+</div>
+
+<div id="status"></div>
+
+<div id="game">
+  <div id="leftStock" class="stock"></div>
+  <div id="board"></div>
+  <div id="rightStock" class="stock"></div>
+</div>
+
+<div class="controls">
+  <button id="resetBtn" onclick="resetGame()" style="display:none;">↻ New Game</button>
+  <button id="menuBtn" onclick="backToMenu()" style="display:none;">⬅ Menu</button>
+</div>
+
+<!-- Ghost piece for touch drag -->
+<div id="touchGhost"></div>
+
+<!-- Replay Manager -->
+<div id="replayManager" style="display:none; margin-top:15px; margin-left:12px; margin-right:12px; border:1px solid #555; padding:10px; border-radius:4px;">
+  <h3 style="margin:0 0 10px 0;">📼 Replays</h3>
+
+  <!-- List of past replays -->
+  <div id="replayList" style="max-height:180px; overflow-y:auto; margin-bottom:10px; border:1px solid #333; padding:5px; border-radius:3px;"></div>
+
+  <!-- Import file -->
+  <div style="margin-bottom:10px;">
+    <input type="file" id="replayFileInput" accept=".json" style="font-size:12px;">
+    <button onclick="importReplayFromFile()" style="margin-left:5px;">📥 Import</button>
+    <button onclick="wipeAllReplays()" style="margin-left:5px; background:#c44;">🗑 Wipe</button>
+  </div>
+
+  <!-- Export/Share buttons -->
+  <div id="replayActions" style="display:none; gap:5px; flex-wrap:wrap; margin-bottom:10px;">
+    <button onclick="replayGame(window.selectedReplayIdx); document.getElementById('replayManager').style.display='none';" style="background:#4a9eff; flex:1; min-width:120px;">▶ Play Replay</button>
+    <button onclick="downloadReplayFile(window.selectedReplayIdx)">⬇ Download</button>
+    <button onclick="copyReplayToClipboard(window.selectedReplayIdx)">📋 Copy JSON</button>
+    <button onclick="showShareLink(window.selectedReplayIdx)">🔗 Share Link</button>
+  </div>
+
+  <!-- Share link display -->
+  <div id="shareLinkBox" style="display:none; margin-top:8px;">
+    <input type="text" id="shareLink" readonly style="width:100%; padding:5px; font-size:12px; border:1px solid #555; border-radius:3px;">
+    <button onclick="copyShareLink()" style="width:100%; margin-top:5px;">Copy Link</button>
+  </div>
+</div>
+
+<div id="p2pModal" class="modal">
+  <div class="modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0;">Online Multiplayer</h3>
+      <button onclick="closeP2PModal()" style="margin:0;padding:4px 10px;font-size:16px;">✕</button>
+    </div>
+    <div id="p2pCreate">
+      <button onclick="createP2PGame()">➕ Create Game</button>
+      <button onclick="showJoinInput()">📥 Join Game</button>
+    </div>
+    <div id="p2pJoin" style="display:none;">
+      <p>Game Code:</p>
+      <input type="text" id="gameCodeDisplay" readonly>
+      <button onclick="copyGameCode()">📋 Copy Link</button>
+      <p style="font-size:13px;"><span class="loading"></span> Share with friend. Waiting for them to join...</p>
+      <p id="p2pStatus"></p>
+      <button onclick="closeP2PModal()">Cancel</button>
+    </div>
+    <div id="p2pInput" style="display:none;">
+      <p>Enter Game Code:</p>
+      <input type="text" id="gameCodeInput" placeholder="Paste game code here">
+      <button onclick="joinP2PGame(event)">Join Game</button>
+      <button onclick="closeP2PModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Audio System ───────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let soundEnabled = true;
+
+function playSound(freq, duration = 0.1, volume = 0.3, type = "sine") {
+  if (!soundEnabled) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function playClick() { playSound(800, 0.08, 0.2); }
+function playMove() { playSound(400, 0.12, 0.25); }
+function playEat() {
+  playSound(150, 0.08, 0.35, "sine");
+  setTimeout(() => playSound(120, 0.08, 0.35, "sine"), 60);
+  setTimeout(() => playSound(100, 0.1, 0.35, "sine"), 120);
+}
+function playWin() { playSound(800, 0.2, 0.3); setTimeout(() => playSound(1000, 0.2, 0.3), 100); }
+function playError() { playSound(200, 0.15, 0.2); }
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem("soundEnabled", soundEnabled ? "true" : "false");
+  const toggle = document.getElementById("soundToggle");
+  toggle.textContent = soundEnabled ? "🔊" : "🔇";
+}
+
+function loadSound() {
+  const saved = localStorage.getItem("soundEnabled");
+  soundEnabled = saved === null ? true : saved === "true";
+  const toggle = document.getElementById("soundToggle");
+  if (toggle) toggle.textContent = soundEnabled ? "🔊" : "🔇";
+}
+
+// ── Music Player ───────────────────────────────────
+let musicPlaying = false;
+let musicLooping = false;
+const bgMusic = document.getElementById("bgMusic");
+const tetrisAudioUrl = "https://www.youtube.com/watch?v=63hoSNvS6Z4";
+
+function initMusic() {
+  bgMusic.src = "Tetris%2099%20-%20Main%20Theme.mp3";
+  bgMusic.loop = false;
+  bgMusic.volume = 0.5;
+  bgMusic.addEventListener("ended", () => {
+    if (musicLooping) bgMusic.currentTime = 0;
+  });
+
+  // Load saved music state
+  const savedMusicPlaying = localStorage.getItem("musicPlaying") === "true";
+  const savedMusicLooping = localStorage.getItem("musicLooping") === "true";
+
+  if (savedMusicLooping) {
+    musicLooping = true;
+    const btn = document.getElementById("loopToggle");
+    if (btn) btn.style.opacity = "1";
+  }
+
+  if (savedMusicPlaying) {
+    musicPlaying = true;
+    const btn = document.getElementById("musicToggle");
+    if (btn) btn.textContent = "⏸";
+    bgMusic.play().catch(() => {});
+  }
+}
+
+function toggleMusic() {
+  const btn = document.getElementById("musicToggle");
+  if (musicPlaying) {
+    bgMusic.pause();
+    musicPlaying = false;
+    btn.textContent = "🎵";
+  } else {
+    bgMusic.play().catch(e => console.log("Music play failed:", e));
+    musicPlaying = true;
+    btn.textContent = "⏸";
+  }
+  localStorage.setItem("musicPlaying", musicPlaying);
+}
+
+function setMusicVolume(value) {
+  bgMusic.volume = value / 100;
+}
+
+function toggleLoop() {
+  const btn = document.getElementById("loopToggle");
+  musicLooping = !musicLooping;
+  btn.style.opacity = musicLooping ? "1" : "0.5";
+  localStorage.setItem("musicLooping", musicLooping);
+}
+
+let mode = "pvp", current = "red", thinking = false;
+let cells = [], boardSize = 4;
+let stock;
+let gameActive = false;
+let gameStartTime = null;
+let p2pMode = false;
+let myColor = null;
+let pcDifficulty = "normal";
+let thinkingStartTime = null;
+let countdownInterval = null;
+
+// P2P sync tracking
+let pendingMoveId = null;
+let moveTimeout = null;
+let replayTimeout = null;
+let moveLog = [];
+let moveCount = 0;
+let winner = null;
+let heartbeatInterval = null;
+let lastMessageTime = null;
+let inactivityCheck = null;
+let myPeerId = null;
+let myGameCode = null;
+let connectionStats = { latency: 0, attempts: 0, sentPackets: 0, recvPackets: 0, lastPingTime: null };
+let pingTimeout = null;
+
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+const ghostEl  = document.getElementById("touchGhost");
+
+
+// ── Touch drag state ───────────────────────────────────
+let touchDrag = null; // { color, size }
+
+document.addEventListener("touchmove", e => {
+  if (!touchDrag) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  ghostEl.style.left = t.clientX + "px";
+  ghostEl.style.top  = t.clientY + "px";
+
+  // Highlight cell under finger
+  ghostEl.style.display = "none";
+  const under = document.elementFromPoint(t.clientX, t.clientY);
+  ghostEl.style.display = "block";
+  document.querySelectorAll(".cell.drop-target").forEach(c => c.classList.remove("drop-target"));
+  under?.closest(".cell")?.classList.add("drop-target");
+}, { passive: false });
+
+document.addEventListener("touchend", e => {
+  if (!touchDrag) return;
+  e.preventDefault();
+
+  const t = e.changedTouches[0];
+  ghostEl.style.display = "none";
+  const under = document.elementFromPoint(t.clientX, t.clientY);
+  ghostEl.style.display = "none";
+  document.querySelectorAll(".cell.drop-target").forEach(c => c.classList.remove("drop-target"));
+
+  const cellEl = under?.closest(".cell");
+  if (cellEl) {
+    const r = parseInt(cellEl.dataset.row);
+    const c = parseInt(cellEl.dataset.col);
+    if (!isNaN(r) && !isNaN(c)) {
+      dropLogic(touchDrag.color, touchDrag.size, cells[r][c]);
+    }
+  }
+
+  document.querySelectorAll(".stockItem.lifting").forEach(item => item.classList.remove("lifting"));
+  touchDrag = null;
+}, { passive: false });
+
+// ── Theme ──────────────────────────────────────────────
+function toggleTheme() {
+  document.documentElement.classList.toggle("light");
+  localStorage.setItem("theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+}
+
+function loadTheme() {
+  if ((localStorage.getItem("theme") || "dark") === "light")
+    document.documentElement.classList.add("light");
+}
+
+// ── Menu ───────────────────────────────────────────────
+function showDifficultyMenu() {
+  playClick();
+  document.getElementById("menu").style.display = "none";
+  const dMenu = document.getElementById("difficultyMenu");
+  dMenu.style.display = "block";
+  dMenu.classList.remove("morph");
+  void dMenu.offsetWidth;
+  dMenu.classList.add("morph");
+}
+
+function hideDifficultyMenu() {
+  playClick();
+  document.getElementById("difficultyMenu").style.display = "none";
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
+}
+
+function showReplayMenu() {
+  playClick();
+  document.getElementById("menu").style.display = "none";
+  const rMenu = document.getElementById("replayMenu");
+  rMenu.style.display = "block";
+  rMenu.classList.remove("morph");
+  void rMenu.offsetWidth;
+  rMenu.classList.add("morph");
+  renderReplayMenuList();
+}
+
+function renderReplayMenuList() {
+  const replays = loadGameReplays();
+  const listEl = document.getElementById("replayMenuList");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  if (replays.length === 0) {
+    listEl.innerHTML = "<div style='padding:8px; text-align:center; opacity:0.6;'>No saved replays</div>";
+    return;
+  }
+
+  replays.forEach((replay, idx) => {
+    const item = document.createElement("div");
+    item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
+    const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const modeStr = replay.mode === "pc" && replay.difficulty ? `pc(${replay.difficulty})` : replay.mode;
+    const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
+    const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
+    item.textContent = `${timestamp} | ${modeStr} | ${status} | ${duration}`;
+    item.onclick = () => replayGame(idx);
+    listEl.appendChild(item);
+  });
+}
+
+function hideReplayMenu() {
+  playClick();
+  gameActive = false;
+
+  // Clear replay timeouts
+  if (replayTimeout) {
+    clearTimeout(replayTimeout);
+    replayTimeout = null;
+  }
+
+  // Clear all animations
+  document.querySelectorAll("[class*='fly'], [class*='place']").forEach(el => {
+    el.classList.remove("fly", "place");
+    el.style.animation = "none";
+    el.style.opacity = "1";
+    el.style.transform = "none";
+  });
+
+  document.getElementById("replayMenu").style.display = "none";
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
+}
+
+function loadReplayFromInput() {
+  const input = document.getElementById("replayPasteInput").value.trim();
+  if (!input) {
+    showToast("❌ Paste a replay link or JSON");
+    return;
+  }
+
+  // Check if it's a URL hash
+  if (input.includes("#replay=")) {
+    const hashIdx = input.indexOf("#replay=");
+    window.location.hash = input.substring(hashIdx);
+    return;
+  }
+
+  // Try parsing as JSON
+  try {
+    const replay = JSON.parse(input);
+    if (replay.moves && Array.isArray(replay.moves)) {
+      // Save to replays and load
+      const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
+      replays.unshift(replay);
+      localStorage.setItem("gameReplays", JSON.stringify(replays));
+      showToast("✓ Replay loaded! Playing...");
+      hideReplayMenu();
+      document.getElementById("replayPasteInput").value = "";
+      replayGame(0); // Auto-play the loaded replay
+      return;
+    }
+  } catch(e) {}
+
+  showToast("❌ Invalid replay format. Use a share link or JSON text.");
+}
+
+function startPCGame(diff) {
+  pcDifficulty = diff;
+  hideDifficultyMenu();
+  startGame("pc");
+}
+
+async function startGame(m) {
+  playClick();
+  mode = m;
+
+  let isNeural = false;
+  if (pcDifficulty === 'neural-ai-first') {
+    if (!neuralNetworkModel) {
+      await loadNeuralModels();
+    }
+    myColor = 'red';      // Player is red, AI is yellow
+    current = 'yellow';   // AI (yellow) goes first
+    isNeural = true;
+  } else if (pcDifficulty === 'neural-ai-second') {
+    if (!neuralNetworkModel) {
+      await loadNeuralModels();
+    }
+    myColor = 'red';      // Player is red, AI is yellow
+    current = 'red';      // Player (red) goes first
+    isNeural = true;
+  }
+  p2pMode = false;
+  if (!isNeural) {
+    myColor = null;
+    current = "red";
+  }
+  thinking = false;
+  gameActive = true;
+  gameStartTime = Date.now();
+  moveLog = [];
+  winner = null;
+
+  stock = {
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
+  };
+
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
+  buildBoard();
+  buildStocks();
+  updateStatus();
+
+  // If AI's turn at game start, trigger AI move
+  if (mode === "pc" && current !== myColor) {
+    thinking = true;
+    setTimeout(pcMove, 600);
+  }
+}
+
+function backToMenu() {
+  playClick();
+  gameActive = false;
+  touchDrag = null;
+  ghostEl.style.display = "none";
+  stopInactivityCheck();
+  if (dataChannel) dataChannel.close();
+  if (peerConnection) peerConnection.close();
+  dataChannel = peerConnection = null;
+
+  // Clear all animations
+  document.querySelectorAll("[class*='fly'], [class*='place']").forEach(el => {
+    el.classList.remove("fly", "place");
+    el.style.animation = "none";
+    el.style.opacity = "";
+    el.style.transform = "";
+  });
+
+  document.getElementById("game").style.display = "none";
+  document.getElementById("resetBtn").style.display = "none";
+  document.getElementById("menuBtn").style.display = "none";
+  statusEl.textContent = "";
+
+  const menu = document.getElementById("menu");
+  menu.style.display = "flex";
+  menu.classList.remove("morph");
+  void menu.offsetWidth;
+  menu.classList.add("morph");
+}
+
+function resetGame() {
+  playClick();
+  if (p2pMode && dataChannel && dataChannel.readyState === 'open') {
+    dataChannel.send(JSON.stringify({ type: "reset" }));
+    startP2PGame(myColor);
+  } else {
+    startGame(mode);
+  }
+}
+
+function startInactivityCheck() {
+  if (inactivityCheck) clearInterval(inactivityCheck);
+  lastMessageTime = Date.now();
+  inactivityCheck = setInterval(() => {
+    if (!p2pMode || !dataChannel || !gameActive) return;
+    if (Date.now() - lastMessageTime > 15000) {
+      if (dataChannel) dataChannel.close();
+      gameActive = false;
+      updateStatus("Opponent timeout — no response for 15s");
+      if (inactivityCheck) clearInterval(inactivityCheck);
+    }
+  }, 2000);
+}
+
+function stopInactivityCheck() {
+  if (inactivityCheck) clearInterval(inactivityCheck);
+  inactivityCheck = null;
+}
+
+// ── P2P ID shortener ───────────────────────────────────
+function shortPeerId(peerId) {
+  // Hash peer ID to 8-char alphanumeric code
+  let hash = 0;
+  for (let i = 0; i < peerId.length; i++) {
+    hash = ((hash << 5) - hash) + peerId.charCodeAt(i);
+    hash = hash & hash; // Keep as 32-bit int
+  }
+  const chars = "ABCDEFGHJKMNPQRSTVWXYZ23456789"; // No 0,1,O,I,L to avoid confusion
+  let code = "";
+  hash = Math.abs(hash);
+  for (let i = 0; i < 8; i++) {
+    code += chars[hash % chars.length];
+    hash = Math.floor(hash / chars.length);
+  }
+  return code;
+}
+
+// ── P2P ────────────────────────────────────────────────
+function showP2PMenu() {
+  playClick();
+  document.getElementById("p2pModal").classList.add("active");
+}
+
+function closeP2PModal() {
+  playClick();
+  document.getElementById("p2pModal").classList.remove("active");
+  document.getElementById("p2pCreate").style.display = "block";
+  document.getElementById("p2pJoin").style.display = "none";
+  document.getElementById("p2pInput").style.display = "none";
+}
+
+function showJoinInput() {
+  playClick();
+  document.getElementById("p2pCreate").style.display = "none";
+  document.getElementById("p2pInput").style.display = "block";
+  document.getElementById("gameCodeInput").focus();
+}
+
+function createP2PGame() {
+  playClick();
+  if (!peerConnection) {
+    createPeerConnection();
+  }
+
+  // Generate random room ID
+  roomId = Math.random().toString(36).substring(2, 10).toUpperCase();
+  isInitiator = true;
+  myColor = "red";
+
+  // Create data channel as initiator
+  dataChannel = peerConnection.createDataChannel('game');
+  setupDataChannel();
+
+  console.log("Created P2P game, room:", roomId);
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'join', roomId }));
+  }
+
+  document.getElementById("p2pCreate").style.display = "none";
+  document.getElementById("p2pJoin").style.display = "block";
+  document.getElementById("gameCodeDisplay").value = roomId;
+}
+
+function setupDataChannel() {
+  if (!dataChannel) return;
+
+  dataChannel.onopen = () => {
+    console.log("Data channel opened");
+    startP2PGame(myColor);
+  };
+
+  dataChannel.onmessage = (event) => {
+    handleP2PMove(JSON.parse(event.data));
+  };
+
+  dataChannel.onerror = (err) => {
+    console.error("Data channel error:", err);
+    gameActive = false;
+    updateStatus("Connection error");
+  };
+
+  dataChannel.onclose = () => {
+    console.log("Data channel closed");
+    gameActive = false;
+    updateStatus("Opponent disconnected");
+    stopInactivityCheck();
+  };
+}
+
+function joinP2PGame(ev) {
+  playClick();
+  const code = document.getElementById("gameCodeInput").value.trim().toUpperCase();
+  if (!code) { showToast("❌ Enter game code"); return; }
+
+  const joinBtn = ev?.target || document.querySelector('#p2pInput button');
+  joinBtn.disabled = true;
+  joinBtn.textContent = "⟳ Connecting...";
+
+  if (!peerConnection) {
+    createPeerConnection();
+  }
+
+  roomId = code;
+  isInitiator = false;
+  myColor = "blue";
+  console.log("Joining room:", roomId);
+
+  // Setup data channel listener as joiner
+  peerConnection.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    console.log("Data channel received");
+    setupDataChannel();
+  };
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'join', roomId }));
+  }
+
+  // Timeout after 10 seconds
+  const timeout = setTimeout(() => {
+    if (!gameActive) {
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join Game";
+      showToast("❌ Connection timeout. Check game code and try again.");
+    }
+  }, 10000);
+
+  // Clear timeout once connected
+  const origSetLocalDesc = peerConnection.setLocalDescription.bind(peerConnection);
+  peerConnection.setLocalDescription = function(desc) {
+    clearTimeout(timeout);
+    return origSetLocalDesc(desc);
+  };
+}
+
+function startP2PGame(color) {
+  mode = "p2p";
+  p2pMode = true;
+  myColor = color;
+  current = "red";
+  thinking = false;
+  gameActive = true;
+
+  // Reset P2P sync state
+  moveLog = [];
+  moveCount = 0;
+  pendingMoveId = null;
+  if (moveTimeout) clearTimeout(moveTimeout);
+
+  stock = {
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
+  };
+
+  closeP2PModal();
+  document.getElementById("menu").style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
+  buildBoard();
+  buildStocks();
+  updateStatus();
+
+  // Start keep-alive heartbeat with latency measurement
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    if (dataChannel && dataChannel.readyState === 'open' && gameActive) {
+      connectionStats.lastPingTime = Date.now();
+      dataChannel.send(JSON.stringify({ type: "ping", ts: connectionStats.lastPingTime }));
+      if (pingTimeout) clearTimeout(pingTimeout);
+      pingTimeout = setTimeout(() => {
+        connectionStats.latency = 9999; // Timeout indicator
+      }, 5000);
+    }
+  }, 10000);
+
+  // Start inactivity timeout
+  startInactivityCheck();
+}
+
+function handleP2PMove(data) {
+  lastMessageTime = Date.now();
+  connectionStats.recvPackets++;
+  if (data.type === "reset") { startP2PGame(myColor); return; }
+  if (data.type === "ping") {
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "pong", ts: data.ts }));
+    return;
+  }
+  if (data.type === "pong") {
+    if (data.ts && data.ts === connectionStats.lastPingTime) {
+      connectionStats.latency = Date.now() - data.ts;
+      clearTimeout(pingTimeout);
+    }
+    return;
+  }
+  if (data.type === "ack") {
+    if (data.id === pendingMoveId) {
+      if (moveTimeout) clearTimeout(moveTimeout);
+      pendingMoveId = null;
+    }
+    return;
+  }
+
+  if (data.type === "verify") {
+    const localHash = hashBoard();
+    if (localHash !== data.hash) {
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "movelog_request", fromMove: data.moveCount }));
+    }
+    return;
+  }
+
+  if (data.type === "movelog_request") {
+    const moves = moveLog.slice(data.fromMove);
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "movelog_response", moves }));
+    return;
+  }
+
+  if (data.type === "movelog_response") {
+    for (const m of data.moves) {
+      playMove();
+      place(cells[m.r][m.c], m.color, m.size);
+      stock[m.color][m.size]--;
+    }
+    buildStocks();
+    return;
+  }
+
+  if (data.type === "move") {
+    thinking = false;
+    const { r, c, size, color, id } = data;
+    playMove();
+    animateOpponentPieceFly(color, size, cells[r][c]);
+    setTimeout(() => place(cells[r][c], color, size, true), 600);
+    stock[color][size]--;
+    moveLog.push(data);
+    moveCount++;
+
+    // Send ACK
+    if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "ack", id }));
+
+    // Verify hash every 3 moves
+    if (moveCount % 3 === 0) {
+      const hash = hashBoard();
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "verify", hash, moveCount }));
+    }
+
+    if (checkWin(color)) {
+      playWin();
+      buildStocks();
+      updateStatus(color.toUpperCase() + " wins!");
+      gameActive = false;
+      saveGameReplay();
+      return;
+    }
+
+    current = current === "red" ? "blue" : "red";
+    buildStocks();
+    updateStatus();
+    return;
+  }
+}
+
+function copyGameCode() {
+  playClick();
+  const code = document.getElementById("gameCodeDisplay").value;
+  navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?join=" + code);
+  showToast("✓ Game link copied!");
+}
+
+// ── Toast Notifications ────────────────────────────────
+function showToast(message, duration = 3000) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #333;
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 4px;
+    border-left: 4px solid #4a9eff;
+    font-size: 14px;
+    z-index: 10000;
+    animation: slideIn 0.3s ease-in-out;
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-in-out forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+// ── Game Replay ────────────────────────────────────────
+function saveGameReplay() {
+  if (moveLog.length === 0) return;
+  const now = new Date();
+  const duration = gameStartTime ? Math.round((now - gameStartTime) / 1000) : 0;
+  const replay = {
+    version: 1,
+    moves: moveLog,
+    timestamp: now.toLocaleString(),
+    timestampISO: now.toISOString(),
+    mode: mode,
+    difficulty: mode === "pc" ? pcDifficulty : null,
+    finalWinner: winner,
+    duration_seconds: duration
+  };
+  const replays = JSON.parse(localStorage.getItem("gameReplays") || "[]");
+  replays.unshift(replay);
+  replays.splice(10); // Keep only last 10 games
+  localStorage.setItem("gameReplays", JSON.stringify(replays));
+
+  // Show replay manager with quick actions for latest replay
+  const managerEl = document.getElementById("replayManager");
+  if (managerEl) {
+    managerEl.style.display = "block";
+    renderReplayList();
+
+    // Auto-select latest replay (index 0) and show actions
+    window.selectedReplayIdx = 0;
+    const listItems = document.querySelectorAll("#replayList div");
+    if (listItems.length > 0) {
+      listItems[0].style.background = "#333";
+    }
+    const actionsEl = document.getElementById("replayActions");
+    if (actionsEl) actionsEl.style.display = "flex";
+  }
+}
+
+function loadGameReplays() {
+  return JSON.parse(localStorage.getItem("gameReplays") || "[]");
+}
+
+// ── Replay Export Functions ─────────────────────────────
+function exportReplayAsJSON(replayIndex) {
+  const replays = loadGameReplays();
+  if (!replays[replayIndex]) return null;
+  const replay = replays[replayIndex];
+  const exported = {
+    version: 1,
+    mode: replay.mode,
+    moves: replay.moves,
+    timestamp: replay.timestampISO || new Date(replay.timestamp).toISOString(),
+    finalWinner: replay.finalWinner || null,
+    duration_seconds: replay.duration_seconds || 0,
+    difficulty: replay.difficulty || null
+  };
+  return JSON.stringify(exported, null, 2);
+}
+
+function downloadReplayFile(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
+
+  const now = new Date();
+  const filename = `replay_${now.toISOString().split('T')[0]}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.json`;
+
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function copyReplayToClipboard(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
+
+  navigator.clipboard.writeText(jsonStr).then(() => {
+    showToast("✓ Replay copied to clipboard!");
+  }).catch(err => {
+    console.error("Copy failed:", err);
+    showToast("❌ Failed to copy. Try downloading instead.");
+  });
+}
+
+function generateShareLink(replayIndex) {
+  const jsonStr = exportReplayAsJSON(replayIndex);
+  if (!jsonStr) { showToast("❌ Replay not found"); return; }
+
+  try {
+    const encoded = btoa(jsonStr);
+    const url = window.location.href.split('#')[0] + `#replay=${encoded}`;
+    return url;
+  } catch (err) {
+    console.error("Encoding failed:", err);
+    showToast("❌ Replay too large to share as link (>2KB). Download as file instead.");
+    return null;
+  }
+}
+
+function showShareLink(replayIndex) {
+  const url = generateShareLink(replayIndex);
+  if (!url) return;
+
+  const linkEl = document.getElementById("shareLink");
+  const boxEl = document.getElementById("shareLinkBox");
+  if (linkEl && boxEl) {
+    linkEl.value = url;
+    boxEl.style.display = "block";
+  }
+}
+
+function copyShareLink() {
+  const linkEl = document.getElementById("shareLink");
+  if (!linkEl || !linkEl.value) return;
+
+  navigator.clipboard.writeText(linkEl.value).then(() => {
+    showToast("✓ Link copied to clipboard!");
+  }).catch(err => {
+    console.error("Copy failed:", err);
+    showToast("❌ Failed to copy link");
+  });
+}
+
+function parseReplayFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target.result);
+        if (!json.moves || !Array.isArray(json.moves)) {
+          reject("Invalid replay file: missing moves array");
+          return;
+        }
+        if (!json.mode || !json.timestamp) {
+          reject("Invalid replay file: missing mode or timestamp");
+          return;
+        }
+        resolve(json);
+      } catch (err) {
+        reject("Failed to parse JSON: " + err.message);
+      }
+    };
+    reader.onerror = () => reject("Failed to read file");
+    reader.readAsText(file);
+  });
+}
+
+function importReplayFromFile() {
+  const fileInput = document.getElementById("replayFileInput");
+  if (!fileInput || !fileInput.files[0]) { showToast("❌ Select a file first"); return; }
+
+  const file = fileInput.files[0];
+  parseReplayFile(file).then(replay => {
+    const replays = loadGameReplays();
+    replays.unshift(replay);
+    replays.splice(50); // Keep last 50 imported replays
+    localStorage.setItem("gameReplays", JSON.stringify(replays));
+    showToast("✓ Replay imported! Playing...");
+    fileInput.value = "";
+    hideReplayMenu();
+    replayGame(0); // Auto-play the imported replay (index 0 since we unshift'd it)
+  }).catch(err => {
+    showToast("❌ " + err);
+  });
+}
+
+function wipeAllReplays() {
+  localStorage.removeItem("gameReplays");
+  showToast("✓ All replays cleared!");
+  renderReplayList();
+}
+
+function loadReplayFromURL() {
+  const hash = window.location.hash;
+  if (!hash.includes("#replay=")) return;
+
+  try {
+    const encoded = hash.split("#replay=")[1];
+    if (!encoded) return;
+
+    const jsonStr = atob(encoded);
+    const replay = JSON.parse(jsonStr);
+
+    if (!replay.moves || !Array.isArray(replay.moves)) {
+      console.error("Invalid replay in URL");
+      return;
+    }
+
+    const replays = loadGameReplays();
+    replays.unshift(replay);
+    replays.splice(50);
+    localStorage.setItem("gameReplays", JSON.stringify(replays));
+
+    showToast("✓ Loaded replay from shared link! Playing...");
+    // Hide menu and auto-play
+    document.getElementById("menu").style.display = "none";
+    replayGame(0);
+  } catch (err) {
+    console.error("Failed to load replay from URL:", err);
+  }
+}
+
+function renderReplayList() {
+  const replays = loadGameReplays();
+  const listEl = document.getElementById("replayList");
+  if (!listEl) return;
+
+  listEl.innerHTML = "";
+  replays.forEach((replay, idx) => {
+    const item = document.createElement("div");
+    item.style.cssText = "padding:5px; border:1px solid #444; margin:2px 0; cursor:pointer; border-radius:3px; background:#222;";
+    const timestamp = replay.timestampISO ? replay.timestampISO.split('T')[0] : (replay.timestamp || "Unknown");
+    const modeStr = replay.mode === "pc" && replay.difficulty ? `pc(${replay.difficulty})` : replay.mode;
+    const status = replay.finalWinner === "draw" ? "Draw" : `Winner: ${replay.finalWinner}`;
+    const duration = replay.duration_seconds ? `${replay.duration_seconds}s` : "?";
+    item.textContent = `${timestamp} | ${modeStr} | ${status} | ${duration}`;
+    item.onclick = () => {
+      window.selectedReplayIdx = idx;
+      document.querySelectorAll("#replayList div").forEach(el => el.style.background = "#222");
+      item.style.background = "#333";
+      const actionsEl = document.getElementById("replayActions");
+      if (actionsEl) actionsEl.style.display = "flex";
+    };
+    listEl.appendChild(item);
+  });
+}
+
+function replayGame(replayIndex) {
+  const replays = loadGameReplays();
+  if (replayIndex >= replays.length) return;
+  const replay = replays[replayIndex];
+
+  // Clear any pending replay timeouts
+  if (replayTimeout) clearTimeout(replayTimeout);
+
+  gameActive = true;
+  mode = replay.mode;
+  current = "red";
+  moveLog = [...replay.moves];
+  moveCount = 0;
+
+  stock = {
+    red:    { small: 8, large: 4 },
+    blue:   { small: 8, large: 4 },
+    yellow: { small: 8, large: 4 }
+  };
+
+  document.getElementById("menu").style.display = "none";
+  const replayMenuEl = document.getElementById("replayMenu");
+  if (replayMenuEl) replayMenuEl.style.display = "none";
+  const replayManagerEl = document.getElementById("replayManager");
+  if (replayManagerEl) replayManagerEl.style.display = "none";
+  document.getElementById("game").style.display = "flex";
+  document.getElementById("resetBtn").style.display = "inline-block";
+  document.getElementById("menuBtn").style.display = "inline-block";
+
+  buildBoard();
+  buildStocks();
+  updateStatus(`Replaying Game | Step 0/${moveLog.length}`);
+
+  let moveIndex = 0;
+
+  function playNextMove() {
+    if (moveIndex >= moveLog.length) {
+      updateStatus(replay.finalWinner ? replay.finalWinner.toUpperCase() + " wins!" : "Game ended");
+      replayTimeout = null;
+      return;
+    }
+
+    const m = moveLog[moveIndex];
+    playMove();
+
+    // Animate piece flying from stock
+    animateOpponentPieceFly(m.color, m.size, cells[m.r][m.c]);
+
+    // Place piece after fly animation (600ms)
+    replayTimeout = setTimeout(() => {
+      place(cells[m.r][m.c], m.color, m.size, true);
+      stock[m.color][m.size]--;
+      buildStocks();
+      updateStatus(`Replaying Game | Step ${moveIndex + 1}/${moveLog.length}`);
+      moveIndex++;
+
+      // Wait for place animation (400ms) + extra delay before next move
+      replayTimeout = setTimeout(playNextMove, 400);
+    }, 600);
+  }
+
+  playNextMove();
+}
+
+// ── Board ──────────────────────────────────────────────
+function updateBoardGlow() {
+  let glowColorDim = "rgba(255,255,255,0.15)";
+  let glowColorBright = "rgba(255,255,255,0.35)";
+  if (current === "Red") {
+    glowColorDim = "rgba(255,68,68,0.2)";
+    glowColorBright = "rgba(255,68,68,0.5)";
+  } else if (current === "Blue") {
+    glowColorDim = "rgba(68,136,255,0.2)";
+    glowColorBright = "rgba(68,136,255,0.5)";
+  } else if (current === "Yellow") {
+    glowColorDim = "rgba(255,221,51,0.2)";
+    glowColorBright = "rgba(255,221,51,0.5)";
+  }
+  document.documentElement.style.setProperty("--glow-color-dim", glowColorDim);
+  document.documentElement.style.setProperty("--glow-color-bright", glowColorBright);
+}
+
+function updateStatus(txt) {
+  if (txt) {
+    statusEl.innerHTML = txt;
+  } else {
+    if (thinking) {
+      statusEl.innerHTML = `<span class="loading"></span> Thinking...<div class="thinking-progress"><div class="thinking-progress-bar"></div></div>`;
+    } else {
+      let status = `Turn: ${current}`;
+      if (p2pMode) {
+        const latencyMs = connectionStats.latency === 9999 ? "∞" : connectionStats.latency + "ms";
+        status += ` | Ping: ${latencyMs}`;
+      }
+      statusEl.textContent = status;
+      updateBoardGlow();
+    }
+  }
+}
+
+
+function buildBoard() {
+  boardEl.innerHTML = "";
+  cells = [];
+  boardEl.style.gridTemplateColumns = `repeat(${boardSize}, auto)`;
+
+  for (let r = 0; r < boardSize; r++) {
+    cells[r] = [];
+    for (let c = 0; c < boardSize; c++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.piece = null;
+      cell.row = r;
+      cell.col = c;
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+
+      // Mouse drag
+      cell.ondragover = e => e.preventDefault();
+      cell.ondrop = e => {
+        const size  = e.dataTransfer.getData("size");
+        const color = e.dataTransfer.getData("color");
+        dropLogic(color, size, cell);
+      };
+
+      boardEl.appendChild(cell);
+      cells[r][c] = cell;
+    }
+  }
+}
+
+function buildStocks() {
+  const left  = document.getElementById("leftStock");
+  const right = document.getElementById("rightStock");
+  left.innerHTML = "";
+  right.innerHTML = "";
+  const rightColor = p2pMode ? "blue" : (mode === "pvp" ? "blue" : "yellow");
+  createStock(left, "red");
+  createStock(right, rightColor);
+
+  // Add active glow to current player's stock
+  left.classList.remove("active");
+  right.classList.remove("active");
+  left.classList.remove("red", "blue", "yellow");
+  right.classList.remove("red", "blue", "yellow");
+  left.classList.add("red");
+  right.classList.add(rightColor);
+
+  if (current === "red") {
+    left.classList.add("active");
+  } else {
+    right.classList.add("active");
+  }
+}
+
+function createStock(box, color) {
+  const h = document.createElement("h4");
+  h.textContent = color.toUpperCase();
+  box.appendChild(h);
+
+  for (const s of ["small", "large"]) {
+    const item = document.createElement("div");
+    item.className = "stockItem";
+
+    const label = document.createElement("div");
+    label.textContent = `${s} ×${stock[color][s]}`;
+    label.style.fontSize = "11px";
+    label.style.marginBottom = "4px";
+
+    const p = document.createElement("div");
+    p.className = `piece ${s} ${color}`;
+
+    const canDrag = p2pMode
+      ? (color === myColor && color === current)
+      : (color === current);
+    const active = canDrag && !thinking && stock[color][s] > 0;
+
+    p.style.opacity = active ? "1" : "0.4";
+    item.style.cursor = active ? "grab" : "default";
+
+    // Mouse drag
+    if (active) {
+      item.draggable = true;
+      item.ondragstart = e => {
+        e.dataTransfer.setData("size", s);
+        e.dataTransfer.setData("color", color);
+      };
+    }
+
+    // Touch drag - only on piece, not text
+    if (active) {
+      item.addEventListener("touchstart", e => {
+        e.preventDefault();
+        touchDrag = { color, size: s };
+        item.classList.add("lifting");
+
+        ghostEl.className = `piece large ${color}`;
+        ghostEl.style.display = "block";
+        const t = e.touches[0];
+        ghostEl.style.left = t.clientX + "px";
+        ghostEl.style.top  = t.clientY + "px";
+      }, { passive: false });
+    }
+
+    item.appendChild(label);
+    item.appendChild(p);
+    box.appendChild(item);
+  }
+}
+
+function canPlace(cell, size) {
+  if (!cell.piece) return true;
+  if (cell.piece.size === "small" && size === "large") return true;
+  return false;
+}
+
+function place(cell, color, size, animate = false) {
+  const hadSmall = cell.piece && cell.piece.size === "small";
+  const isLarge = size === "large";
+
+  cell.innerHTML = "";
+  const p = document.createElement("div");
+  p.className = `piece ${size} ${color}`;
+  if (animate) p.classList.add("place-anim");
+  p.style.animation = "glow 1.5s ease-in-out";
+  cell.appendChild(p);
+  cell.piece = { color, size };
+
+  // Explosion effect if large covers small
+  if (hadSmall && isLarge) {
+    playEat();
+    p.style.animation = "explosion 0.6s ease-out, glow 1.5s ease-in-out";
+    boardEl.style.animation = "boardShake 0.5s ease-in-out";
+    setTimeout(() => { boardEl.style.animation = ""; }, 500);
+  }
+}
+
+function animateOpponentPieceFly(color, size, targetCell) {
+  let stockEl;
+  if (p2pMode) {
+    // In P2P: myColor determines which side I'm on, opponent is on the other side
+    stockEl = myColor === "red" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  } else {
+    // In PvP/PvPC: color determines stock location
+    stockEl = color === "yellow" ? document.getElementById("rightStock") : document.getElementById("leftStock");
+  }
+  const sourcePieceEl = stockEl.querySelector(`.piece.${size}.${color}`);
+  const sourceRect = sourcePieceEl ? sourcePieceEl.getBoundingClientRect() : stockEl.getBoundingClientRect();
+  const cellRect = targetCell.getBoundingClientRect();
+
+  const flyPiece = document.createElement("div");
+  flyPiece.className = `piece ${size} ${color}`;
+  flyPiece.style.position = "fixed";
+  flyPiece.style.left = sourceRect.left + "px";
+  flyPiece.style.top = sourceRect.top + "px";
+  flyPiece.style.zIndex = "9999";
+  flyPiece.style.pointerEvents = "none";
+  document.body.appendChild(flyPiece);
+
+  // Calculate to cell center instead of top-left
+  const deltaX = cellRect.left - sourceRect.left + (cellRect.width - sourceRect.width) / 2;
+  const deltaY = cellRect.top - sourceRect.top + (cellRect.height - sourceRect.height) / 2;
+
+  flyPiece.style.setProperty("--tx", deltaX + "px");
+  flyPiece.style.setProperty("--ty", deltaY + "px");
+  flyPiece.style.animation = "piece-fly 0.6s ease-in-out forwards";
+
+  setTimeout(() => flyPiece.remove(), 600);
+}
+
+// Shared drop logic used by both mouse drop and touch drop
+function dropLogic(color, size, cell) {
+  thinking = false; // Clear loading on first move
+  if (!gameActive) return;
+  if (!color || !size || !cell) return;
+  if (p2pMode && color !== myColor) return;
+  if (color !== current || stock[color][size] <= 0) { playError(); return; }
+  if (!canPlace(cell, size)) { playError(); return; }
+
+  playMove();
+  place(cell, color, size);
+  stock[color][size]--;
+  buildStocks();
+
+  // Animate piece snap to center if dropped off-center
+  const pieceEl = cell.querySelector(".piece");
+  if (pieceEl) {
+    const cellRect = cell.getBoundingClientRect();
+    const pieceRect = pieceEl.getBoundingClientRect();
+    const deltaX = cellRect.left + cellRect.width / 2 - pieceRect.left - pieceRect.width / 2;
+    const deltaY = cellRect.top + cellRect.height / 2 - pieceRect.top - pieceRect.height / 2;
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      pieceEl.style.setProperty("--tx", deltaX + "px");
+      pieceEl.style.setProperty("--ty", deltaY + "px");
+      pieceEl.classList.add("place");
+    }
+  }
+
+  // Record move to replay log (for all game modes)
+  const moveId = Date.now();
+  moveLog.push({ r: cell.row, c: cell.col, size, color, id: moveId, ts: moveId });
+
+  if (p2pMode && dataChannel && dataChannel.readyState === 'open') {
+    pendingMoveId = moveId;
+    connectionStats.sentPackets++;
+    dataChannel.send(JSON.stringify({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId }));
+
+    // Wait for ACK, timeout after 5s = resend
+    if (moveTimeout) clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(() => {
+      if (pendingMoveId === moveId && dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(JSON.stringify({ type: "move", r: cell.row, c: cell.col, size, color, id: moveId }));
+      }
+    }, 5000);
+  }
+
+  moveCount++;
+
+  if (checkWin(color)) {
+    playWin();
+    updateStatus(color.toUpperCase() + " wins!");
+    winner = color;
+    gameActive = false;
+    saveGameReplay();
+    return;
+  }
+
+  if (p2pMode) {
+    // Verify hash every 3 moves
+    if (moveCount % 3 === 0) {
+      const hash = hashBoard();
+      if (dataChannel && dataChannel.readyState === 'open') dataChannel.send(JSON.stringify({ type: "verify", hash, moveCount }));
+    }
+
+    current = current === "red" ? "blue" : "red";
+    thinking = current !== myColor; // Show loading if waiting for opponent
+    buildStocks();
+    updateStatus();
+    return;
+  }
+
+  const next = current === "red" ? (mode === "pvp" ? "blue" : "yellow") : "red";
+  if (hasValidMoves(next)) {
+    nextTurn();
+  } else {
+    if (!hasValidMoves(current)) {
+      updateStatus("Draw! No valid moves for either player!");
+      winner = "draw";
+    } else {
+      playWin();
+      updateStatus(next + " blocked! No valid moves — " + current + " wins!");
+      winner = current;
+    }
+    gameActive = false;
+    saveGameReplay();
+  }
+}
+
+function hasValidMoves(color) {
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
+      for (const s of ["small", "large"])
+        if (stock[color][s] > 0 && canPlace(cells[r][c], s)) return true;
+  return false;
+}
+
+function isMatch(cell, color) {
+  return cell.piece && cell.piece.color === color;
+}
+
+function checkLine(list, color) {
+  return list.every(([r, c]) => isMatch(cells[r][c], color));
+}
+
+function checkWin(color) {
+  for (let i = 0; i < boardSize; i++) {
+    if (checkLine([...Array(boardSize)].map((_, c) => [i, c]), color)) return true;
+    if (checkLine([...Array(boardSize)].map((_, r) => [r, i]), color)) return true;
+  }
+  if (checkLine([...Array(boardSize)].map((_, i) => [i, i]), color)) return true;
+  if (checkLine([...Array(boardSize)].map((_, i) => [i, boardSize - 1 - i]), color)) return true;
+  if (checkLine([[0,0],[0,3],[3,0],[3,3]], color)) return true;
+  if (checkLine([[1,1],[1,2],[2,1],[2,2]], color)) return true;
+  return false;
+}
+
+// Hash board state for sync verification
+function hashBoard() {
+  let hash = 0;
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      const cell = cells[r][c];
+      if (cell.piece) {
+        const colorIdx = { red: 1, blue: 2, yellow: 3 }[cell.piece.color] || 0;
+        const sizeIdx = cell.piece.size === "small" ? 1 : 2;
+        hash = (hash * 10 + colorIdx * 3 + sizeIdx) % 1000000;
+      }
+    }
+  }
+  return hash;
+}
+
+function startCountdown() {
+  const diffLabel = pcDifficulty === "demon3" ? "☠️ DEMON 3"
+    : pcDifficulty === "demon2" ? "💀 DEMON 2"
+    : pcDifficulty === "demon" ? "👿 DEMON"
+    : pcDifficulty.toUpperCase();
+  updateStatus(`<span class="loading"></span> PC (${diffLabel}) thinking...`);
+}
+
+function stopCountdown() {
+  // No-op - static display doesn't need cleanup
+}
+
+function nextTurn() {
+  if (mode === "pc" && current === "red") {
+    current = "yellow";
+    thinking = true;
+    buildStocks();
+    startCountdown();
+    setTimeout(pcMove, 600);
+  } else {
+    current = current === "red" ? "blue" : "red";
+    buildStocks();
+    updateStatus();
+  }
+}
+
+// ── PC AI helpers ──────────────────────────────────────
+function getAllMoves(color) {
+  const moves = [];
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
+      for (const s of ["small", "large"]) {
+        if (stock[color][s] <= 0) continue;
+        if (!canPlace(cells[r][c], s)) continue;
+        moves.push({ cell: cells[r][c], size: s });
+      }
+  return moves;
+}
+
+function getWinLines() {
+  const lines = [];
+  for (let i = 0; i < boardSize; i++) {
+    lines.push([...Array(boardSize)].map((_, c) => [i, c]));
+    lines.push([...Array(boardSize)].map((_, r) => [r, i]));
+  }
+  lines.push([...Array(boardSize)].map((_, i) => [i, i]));
+  lines.push([...Array(boardSize)].map((_, i) => [i, boardSize - 1 - i]));
+  lines.push([[0,0],[0,3],[3,0],[3,3]]);
+  lines.push([[1,1],[1,2],[2,1],[2,2]]);
+  return lines;
+}
+
+function findWinningMove(color, preferLarge = false) {
+  const moves = [];
+  for (let r = 0; r < boardSize; r++)
+    for (let c = 0; c < boardSize; c++)
+      for (const s of ["small", "large"]) {
+        if (stock[color]?.[s] === 0) continue;
+        if (!canPlace(cells[r][c], s)) continue;
+        const backup = cells[r][c].piece;
+        cells[r][c].piece = { color, size: s };
+        const win = checkWin(color);
+        cells[r][c].piece = backup;
+        if (win) moves.push({ cell: cells[r][c], size: s });
+      }
+
+  if (!moves.length) return null;
+
+  if (preferLarge) {
+    const large = moves.find(m => m.size === "large");
+    return large || moves[0];
+  }
+  return moves[0];
+}
+
+function doPCMove(move) {
+  playMove();
+  animateOpponentPieceFly("yellow", move.size, move.cell);
+  stock.yellow[move.size]--;
+
+  // Record move to replay log
+  const moveId = Date.now();
+  moveLog.push({ r: move.cell.row, c: move.cell.col, size: move.size, color: "yellow", id: moveId, ts: moveId });
+
+  setTimeout(() => {
+    place(move.cell, "yellow", move.size, true);
+    buildStocks();
+
+    if (checkWin("yellow")) {
+      playWin();
+      updateStatus("YELLOW wins!");
+      winner = "yellow";
+      gameActive = false;
+      saveGameReplay();
+      return;
+    }
+
+    current = "red";
+    thinking = false;
+    stopCountdown();
+    buildStocks();
+
+    // Check if Red has valid moves
+    if (!hasValidMoves("red")) {
+      if (!hasValidMoves("yellow")) {
+        playWin();
+        updateStatus("Draw! No valid moves for either player.");
+        winner = "draw";
+      } else {
+        playWin();
+        updateStatus("RED blocked! No valid moves — YELLOW wins!");
+        winner = "yellow";
+      }
+      gameActive = false;
+      saveGameReplay();
+      return;
+    }
+
+    updateStatus();
+  }, 600);
+}
+
+function pcNoMoves() {
+  thinking = false;
+  stopCountdown();
+  current = "red";
+  buildStocks();
+  if (!hasValidMoves("yellow")) {
+    updateStatus("Draw! No valid moves for either player!");
+    winner = "draw";
+  } else {
+    playWin();
+    updateStatus("No valid moves — YELLOW wins by default!");
+    winner = "yellow";
+  }
+  gameActive = false;
+  saveGameReplay();
+}
+
+// ── PC Neural ─────────────────────────────────────────
+async function pcMoveNeural() {
+  if (!gameActive) return;
+
+  // Use merged network for both Red and Yellow
+  const network = neuralNetworkModel;
+
+  if (!network) {
+    console.error('Neural network model not loaded');
+    pcMove(); // Fallback to DEMON
+    return;
+  }
+
+  const startTime = Date.now();
+  const timeLimit = 5000; // 5 seconds
+
+  try {
+    // Run MCTS search with appropriate neural model
+    const bestMove = await mctsSearch(cells, stock, current, network, 200, timeLimit);
+
+    if (!bestMove) {
+      console.error('MCTS returned no move');
+      return;
+    }
+
+    // Make the move - bestMove.cell is cells[r][c] object with .row/.col
+    const cellEl = document.querySelector(`[data-row="${bestMove.cell.row}"][data-col="${bestMove.cell.col}"]`);
+    dropLogic(current, bestMove.size, cellEl);
+
+  } catch (err) {
+    console.error('Neural AI error:', err);
+    // Fallback
+    const moves = getAllMoves(current);
+    if (moves.length > 0) {
+      const fallbackEl = document.querySelector(`[data-row="${moves[0].cell.row}"][data-col="${moves[0].cell.col}"]`);
+      dropLogic(current, moves[0].size, fallbackEl);
+    }
+  }
+
+  thinking = false;
+}
+
+// ── PC Easy ───────────────────────────────────────────
+function pcMove() {
+  if (pcDifficulty === 'neural-ai-first' || pcDifficulty === 'neural-ai-second') {
+    pcMoveNeural();
+    return;
+  }
+
+  if (pcDifficulty === "demon3") {
+    pcMoveDemon3();
+  } else {
+    pcMoveDemon2();
+  }
+}
+
+
+// ── PC DEMON 2 (Sampling-based evaluation) ──────
+function countThreats(color) {
+  let count = 0;
+  for (const line of getWinLines()) {
+    let colorCount = 0, blockCount = 0;
+    for (const [lr, lc] of line) {
+      if (cells[lr][lc].piece?.color === color) colorCount++;
+      else if (cells[lr][lc].piece) blockCount++;
+    }
+    if (blockCount === 0 && colorCount >= 2) count++;
+  }
+  return count;
+}
+
+function evalMoveDemon2(move, samples = 40) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  const sS = stock["yellow"].small, sL = stock["yellow"].large;
+
+  cells[r][c].piece = { color: "yellow", size: move.size };
+  stock["yellow"][move.size]--;
+
+  // Heuristic score: position value + threat creation
+  let score = 0;
+  score += POS_SCORE[r][c]; // Position value
+  score += countThreats("yellow") * 5; // Bonus for creating threats
+
+  // Penalty for covering own pieces
+  const hadSmall = backup && backup.size === "small" && backup.color === "yellow";
+  if (hadSmall && move.size === "large") score -= 10;
+
+  // Sample wins
+  let wins = 0;
+  for (let i = 0; i < samples; i++) {
+    const sim_stock = JSON.parse(JSON.stringify(stock));
+    const sim_board = [];
+    for (let sr = 0; sr < boardSize; sr++) {
+      sim_board[sr] = [];
+      for (let sc = 0; sc < boardSize; sc++) {
+        sim_board[sr][sc] = cells[sr][sc].piece ? {...cells[sr][sc].piece} : null;
+      }
+    }
+
+    let sim_color = "red";
+    for (let d = 0; d < 12; d++) {
+      const sim_moves = [];
+      for (let sr = 0; sr < boardSize; sr++) {
+        for (let sc = 0; sc < boardSize; sc++) {
+          for (const s of ["small", "large"]) {
+            if (sim_stock[sim_color]?.[s] <= 0) continue;
+            if (!canPlace(cells[sr][sc], s)) continue;
+            sim_moves.push({ r: sr, c: sc, size: s });
+          }
+        }
+      }
+      if (sim_moves.length === 0) break;
+      const m = sim_moves[Math.floor(Math.random() * sim_moves.length)];
+      sim_board[m.r][m.c] = { color: sim_color, size: m.size };
+      sim_stock[sim_color][m.size]--;
+      if (sim_color === "yellow") wins++;
+      sim_color = sim_color === "yellow" ? "red" : "yellow";
+    }
+  }
+
+  cells[r][c].piece = backup;
+  stock["yellow"].small = sS;
+  stock["yellow"].large = sL;
+  return score + (wins / samples) * 10;
+}
+
+function findForkMove(color) {
+  for (const m of getAllMoves(color)) {
+    const r = m.cell.row, c = m.cell.col;
+    const backup = cells[r][c].piece;
+    cells[r][c].piece = { color, size: m.size };
+
+    let winCount = 0;
+    for (const nm of getAllMoves(color)) {
+      const r2 = nm.cell.row, c2 = nm.cell.col;
+      const backup2 = cells[r2][c2].piece;
+      cells[r2][c2].piece = { color, size: nm.size };
+      if (checkWin(color)) winCount++;
+      cells[r2][c2].piece = backup2;
+      if (winCount >= 2) break;
+    }
+
+    cells[r][c].piece = backup;
+    if (winCount >= 2) return m;
+  }
+  return null;
+}
+
+function countCreatedThreats(color, move) {
+  const r = move.cell.row, c = move.cell.col;
+  const backup = cells[r][c].piece;
+  cells[r][c].piece = { color, size: move.size };
+
+  let threats = 0;
+  for (const line of getWinLines()) {
+    let count = 0, empty = 0;
+    for (const [lr, lc] of line) {
+      const p = cells[lr][lc].piece;
+      if (p?.color === color) count++;
+      else if (!p) empty++;
+    }
+    if (count >= 2 && empty > 0) threats++;
+  }
+
+  cells[r][c].piece = backup;
+  return threats;
+}
+
+function evalMoveStrength(move, color) {
+  let strength = POS_SCORE[move.cell.row][move.cell.col];
+  strength += countCreatedThreats(color, move) * 8;
+  if (move.size === "large") strength += 5;
+  return strength;
+}
+
+// ── Demon2 Perfect AI Constants ────────────────────
+const MAX_DEPTH = 12;
+
+// ── Zobrist Hash Table ─────────────────────────────
+function initZobristTable() {
+  const zobrist = {};
+
+  // 256 random 32-bit integers for pieces (16 cells × 4 piece types)
+  zobrist.pieces = [];
+  for (let i = 0; i < 256; i++) {
+    zobrist.pieces[i] = Math.floor(Math.random() * 0x100000000);
+  }
+
+  // 512 random integers for stock state
+  zobrist.stock = [];
+  for (let i = 0; i < 512; i++) {
+    zobrist.stock[i] = Math.floor(Math.random() * 0x100000000);
+  }
+
+  return zobrist;
+}
+
+let zobristTable = initZobristTable();
+
+function colorToNum(color) {
+  return color === "red" ? 0 : color === "yellow" ? 1 : 2;
+}
+
+const WIN_SCORE = 1000;
+const LOSS_SCORE = -1000;
+const DRAW_SCORE = 0;
+const TIME_LIMIT = 5000; // milliseconds
+const POSITION_SCORE = [
+  [3, 2, 2, 3],
+  [2, 4, 4, 2],
+  [2, 4, 4, 2],
+  [3, 2, 2, 3]
+];
+
+function zobristHash(board, stock) {
+  let hash = 0;
+
+  // XOR all pieces
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const piece = board[r][c].piece;
+      if (piece) {
+        const cellIndex = r * 4 + c; // 0-15
+        const colorNum = colorToNum(piece.color); // 0-2
+        const sizeNum = piece.size === "large" ? 1 : 0;
+        const typeIndex = colorNum * 2 + sizeNum; // 0-5
+        const tableIndex = cellIndex * 4 + typeIndex; // 0-63
+        hash ^= zobristTable.pieces[tableIndex];
+      }
+    }
+  }
+
+  // XOR stock state
+  hash ^= zobristTable.stock[stock.yellow.small + stock.yellow.large * 16];
+  hash ^= zobristTable.stock[256 + stock.red.small + stock.red.large * 16];
+
+  return hash;
+}
+
+// ── Neural Network Model Loading ────────────────────────────────────
+let neuralNetworkModel = null;  // Merged network (works for Red and Yellow via perspective bit)
+
+async function loadNeuralModels() {
+  console.log('Loading neural network model...');
+
+  try {
+    // Load merged model (Rev1260: 81-dim input with perspective bit)
+    neuralNetworkModel = await tf.loadLayersModel('ai_model_dual/tfjs_model/model.json');
+    console.log('✓ Loaded neural model (Rev1260 - merged Red/Yellow network)');
+  } catch (err) {
+    console.error('Failed to load neural model:', err);
+    neuralNetworkModel = null;
+  }
+}
+
+// ── Monte Carlo Tree Search with Network Guidance ───────────────────
+class MCTSNode {
+  constructor(board, stock, move = null, playerToMove = 'red') {
+    this.board = JSON.parse(JSON.stringify(board));
+    this.stock = JSON.parse(JSON.stringify(stock));
+    this.move = move;
+    this.playerToMove = playerToMove; // Track whose turn it is
+    this.visits = 0;
+    this.value = 0; // Accumulated value
+    this.children = [];
+    this.parent = null;
+  }
+}
+
+async function mctsSearch(board, stock, aiColor, network, simulations = 200, timeLimit = 5000) {
+  const startTime = Date.now();
+  // Root node: opponent just moved, now it's aiColor's turn
+  const root = new MCTSNode(board, stock, null, aiColor);
+
+  let simulationCount = 0;
+  while (simulationCount < simulations && Date.now() - startTime < timeLimit) {
+    // Selection + Expansion
+    let node = root;
+    let path = [node];
+
+    while (node.children.length > 0 && Date.now() - startTime < timeLimit) {
+      // UCB1 selection with network policy bias
+      let bestChild = null;
+      let bestUCB = -Infinity;
+
+      for (const child of node.children) {
+        const exploitation = child.value / (child.visits || 1);
+        const exploration = Math.sqrt(Math.log(node.visits) / (child.visits || 1));
+        const ucb = exploitation + exploration;
+
+        if (ucb > bestUCB) {
+          bestUCB = ucb;
+          bestChild = child;
+        }
+      }
+
+      node = bestChild;
+      path.push(node);
+    }
+
+    // Expansion: generate children if not terminal
+    if (node.children.length === 0 && !isTerminal(node.board, node.stock)) {
+      const currentPlayer = node.playerToMove; // Who moves from this node
+      const moves = getAllMoves(currentPlayer);
+
+      for (const move of moves) {
+        const childBoard = JSON.parse(JSON.stringify(node.board));
+        const childStock = JSON.parse(JSON.stringify(node.stock));
+
+        // Make move
+        const r = move.cell.row, c = move.cell.col;
+        childBoard[r][c].piece = { color: currentPlayer, size: move.size };
+        childStock[currentPlayer][move.size]--;
+
+        const childNextPlayer = currentPlayer === 'red' ? 'yellow' : 'red';
+        const child = new MCTSNode(childBoard, childStock, move, childNextPlayer);
+        child.parent = node;
+        node.children.push(child);
+      }
+    }
+
+    // Evaluation: use network value estimate
+    const isYellowTurn = node.playerToMove === 'yellow';
+    const boardEncoding = encodeBoardForNetwork(node.board, isYellowTurn);
+    const [policy, value] = await network.predict(boardEncoding);
+
+    const nodeValue = value.dataSync()[0]; // Value in [-1, +1]
+    value.dispose(); // Clean up tensor
+    policy.dispose();
+
+    // Backup: propagate value up tree
+    for (const n of path) {
+      n.visits++;
+      n.value += nodeValue;
+    }
+
+    simulationCount++;
+  }
+
+  // Return best move (highest visit count = most explored = best estimate)
+  let bestMove = null;
+  let maxVisits = 0;
+
+  for (const child of root.children) {
+    if (child.visits > maxVisits) {
+      maxVisits = child.visits;
+      bestMove = child.move;
+    }
+  }
+
+  return bestMove;
+}
+
+function encodeBoardForNetwork(board, isYellowTurn) {
+  // Convert 4x4 board to 81-dim encoding:
+  // - 80-dim: 16 cells × 5 states each (one-hot)
+  // - 1-dim: perspective bit (0.0 = red, 1.0 = yellow)
+  const encoding = new Array(81).fill(0);
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const cellIdx = r * 4 + c;
+      const piece = board[r][c].piece;
+
+      if (!piece) {
+        // Empty: encoding[cellIdx*5+0] = 1 (implicit, stay 0)
+      } else {
+        const stateMap = {
+          'red-small': 1,
+          'red-large': 2,
+          'yellow-small': 3,
+          'yellow-large': 4
+        };
+        const state = `${piece.color}-${piece.size}`;
+        encoding[cellIdx * 5 + stateMap[state]] = 1;
+      }
+    }
+  }
+
+  // Perspective bit (dim 80)
+  encoding[80] = isYellowTurn ? 1.0 : 0.0;
+
+  return tf.tensor2d([encoding]); // (1, 81)
+}
+
+function isTerminal(board, stock) {
+  return checkWin('red') || checkWin('yellow') || !hasValidMoves('red') || !hasValidMoves('yellow');
+}
+
+// ── Threat Detection ───────────────────────────────
+function detectThreats(board, stock, opponentColor) {
+  const threats = [];
+  const directions = [
+    {dr: 0, dc: 1}, // horizontal
+    {dr: 1, dc: 0}, // vertical
+    {dr: 1, dc: 1}, // diagonal /
+    {dr: 1, dc: -1} // diagonal \
+  ];
+
+  // Check each cell as potential threat location
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece) continue; // occupied, can't block here
+
+      // Check if this cell would complete opponent win
+      let severity = 0;
+
+      for (const dir of directions) {
+        let count = 0;
+        let largeCount = 0;
+
+        // Count same-color pieces in this direction
+        for (let dist = -3; dist <= 3; dist++) {
+          const nr = r + dir.dr * dist;
+          const nc = c + dir.dc * dist;
+          if (nr < 0 || nr >= 4 || nc < 0 || nc >= 4) continue;
+          if (!board[nr][nc].piece || board[nr][nc].piece.color !== opponentColor) continue;
+
+          count++;
+          if (board[nr][nc].piece.size === "large") largeCount++;
+        }
+
+        // 3-in-a-row = IMMEDIATE_WIN (severity 10)
+        if (count === 3) severity = Math.max(severity, 10);
+        // 2-in-a-row = high threat (severity 8)
+        else if (count === 2) severity = Math.max(severity, 8);
+      }
+
+      if (severity > 0) {
+        threats.push({ cell: {row: r, col: c}, severity });
+      }
+    }
+  }
+
+  // Sort by severity DESC
+  threats.sort((a, b) => b.severity - a.severity);
+  return threats;
+}
+
+function countThreats(board, stock, aiColor) {
+  // Count 2+ simultaneous winning threats (forks)
+  let threatCount = 0;
+  const directions = [
+    {dr: 0, dc: 1}, // horizontal
+    {dr: 1, dc: 0}, // vertical
+    {dr: 1, dc: 1}, // diagonal /
+    {dr: 1, dc: -1} // diagonal \
+  ];
+
+  // Check each empty cell as potential completion
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece) continue; // occupied
+
+      // Count how many directions would have 2+ same-color pieces
+      let directionScore = 0;
+
+      for (const dir of directions) {
+        let count = 0;
+
+        // Count same-color pieces in this direction (including diagonals)
+        for (let dist = -3; dist <= 3; dist++) {
+          const nr = r + dir.dr * dist;
+          const nc = c + dir.dc * dist;
+          if (nr < 0 || nr >= 4 || nc < 0 || nc >= 4) continue;
+          if (!board[nr][nc].piece || board[nr][nc].piece.color !== aiColor) continue;
+          count++;
+        }
+
+        if (count >= 2) directionScore++;
+      }
+
+      // If 2+ directions have 2+ pieces, this is a fork-setup
+      if (directionScore >= 2) threatCount++;
+    }
+  }
+
+  return threatCount;
+}
+
+function evalLeaf(board, stock, aiColor) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+  let score = 0;
+
+  // Piece count differential: ±10 per piece
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (!board[r][c].piece) continue;
+      const p = board[r][c].piece;
+      const isAI = p.color === aiColor;
+      const pointValue = p.size === "large" ? 30 : 8;
+      score += isAI ? pointValue : -pointValue;
+    }
+  }
+
+  // Position control: corners +10, center +5, edges +2
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (!board[r][c].piece) continue;
+      const p = board[r][c].piece;
+      const posValue = POSITION_SCORE[r][c];
+      score += p.color === aiColor ? posValue : -posValue;
+    }
+  }
+
+  // Stock advantage: ±5 per piece
+  score += (stock[aiColor].small + stock[aiColor].large) * 5;
+  score -= (stock[opColor].small + stock[opColor].large) * 5;
+
+  // Threat count: opponent threats -50 each, AI threats +50 each (with fork bonus)
+  let opponentThreats = 0;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece || stock[opColor].small === 0 && stock[opColor].large === 0) continue;
+      const backup = board[r][c].piece;
+      for (const size of ["small", "large"]) {
+        if (stock[opColor][size] === 0) continue;
+        board[r][c].piece = { color: opColor, size };
+        if (checkWin(opColor)) opponentThreats++;
+        board[r][c].piece = backup;
+      }
+    }
+  }
+  score -= opponentThreats * 50;
+
+  // AI threat creation: positions where AI can win in 1 move
+  let aiThreats = 0;
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      if (board[r][c].piece || stock[aiColor].small === 0 && stock[aiColor].large === 0) continue;
+      const backup = board[r][c].piece;
+      for (const size of ["small", "large"]) {
+        if (stock[aiColor][size] === 0) continue;
+        board[r][c].piece = { color: aiColor, size };
+        if (checkWin(aiColor)) aiThreats++;
+        board[r][c].piece = backup;
+      }
+    }
+  }
+  // Fork bonus: 2+ threats = much stronger (exponential value)
+  if (aiThreats >= 2) {
+    score += aiThreats * 80; // 80 per threat when forking, bonus for multiple
+  } else {
+    score += aiThreats * 50; // 50 per threat for single threats
+  }
+
+  return score;
+}
+
+function moveEquals(move1, move2) {
+  return move1.cell.row === move2.cell.row &&
+         move1.cell.col === move2.cell.col &&
+         move1.size === move2.size;
+}
+
+function rootMoveOrder(moves, board, stock, aiColor) {
+  // Root-level move pre-sorting for faster search
+  const opponentColor = aiColor === "yellow" ? "red" : "yellow";
+  const threats = detectThreats(board, stock, opponentColor);
+
+  return moves.sort((a, b) => {
+    let scoreA = 0, scoreB = 0;
+
+    // 1. Blocking opponent threats (+40)
+    let aBlocks = false, bBlocks = false;
+    for (const threat of threats) {
+      if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) aBlocks = true;
+      if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) bBlocks = true;
+    }
+    scoreA += aBlocks ? 40 : 0;
+    scoreB += bBlocks ? 40 : 0;
+
+    // 2. Creating AI threats (+50)
+    // Quick heuristic: placing large pieces near existing pieces
+    let aNearOwn = 0, bNearOwn = 0;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (!board[r][c].piece || board[r][c].piece.color !== aiColor) continue;
+        if (Math.abs(a.cell.row - r) <= 1 && Math.abs(a.cell.col - c) <= 1) aNearOwn++;
+        if (Math.abs(b.cell.row - r) <= 1 && Math.abs(b.cell.col - c) <= 1) bNearOwn++;
+      }
+    }
+    scoreA += aNearOwn > 0 ? 30 : 0;
+    scoreB += bNearOwn > 0 ? 30 : 0;
+
+    // 3. Center control (+10)
+    const centerScore = (r, c) => 4 - Math.abs(r - 1.5) - Math.abs(c - 1.5);
+    scoreA += centerScore(a.cell.row, a.cell.col);
+    scoreB += centerScore(b.cell.row, b.cell.col);
+
+    // 4. Large pieces (+5)
+    if (a.size === "large") scoreA += 5;
+    if (b.size === "large") scoreB += 5;
+
+    return scoreB - scoreA; // Descending
+  });
+}
+
+function moveOrder(moves, board, stock, aiColor, depth, killerMoves) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+
+  // NEW: Detect opponent threats
+  const opponentColor = aiColor === "red" ? "yellow" : "red";
+  const threats = detectThreats(board, stock, opponentColor);
+
+  return moves.sort((a, b) => {
+    const aRow = a.cell.row, aCol = a.cell.col;
+    const bRow = b.cell.row, bCol = b.cell.col;
+
+    // Priority 0: Immediate AI wins (highest priority)
+    const aBackup = board[aRow][aCol].piece;
+    board[aRow][aCol].piece = { color: aiColor, size: a.size };
+    const aWins = checkWin(aiColor) ? 1 : 0;
+    board[aRow][aCol].piece = aBackup;
+
+    const bBackup = board[bRow][bCol].piece;
+    board[bRow][bCol].piece = { color: aiColor, size: b.size };
+    const bWins = checkWin(aiColor) ? 1 : 0;
+    board[bRow][bCol].piece = bBackup;
+
+    if (aWins !== bWins) return bWins - aWins;
+
+    // Priority 1: Block opponent threats
+    if (threats.length > 0) {
+      let aBlocksThreat = false, bBlocksThreat = false;
+      for (const threat of threats) {
+        if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) {
+          aBlocksThreat = true;
+          break;
+        }
+      }
+      for (const threat of threats) {
+        if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) {
+          bBlocksThreat = true;
+          break;
+        }
+      }
+      // Both block = compare by threat severity
+      if (aBlocksThreat && bBlocksThreat) {
+        // Find severity of each
+        let aSev = 0, bSev = 0;
+        for (const threat of threats) {
+          if (a.cell.row === threat.cell.row && a.cell.col === threat.cell.col) aSev = threat.severity;
+          if (b.cell.row === threat.cell.row && b.cell.col === threat.cell.col) bSev = threat.severity;
+        }
+        if (aSev !== bSev) return bSev - aSev; // Higher severity = stronger block
+      }
+      // One blocks, one doesn't
+      if (aBlocksThreat !== bBlocksThreat) return bBlocksThreat ? 1 : -1;
+    }
+
+    // Priority 2: Opponent blocking moves
+    const aBlockBackup = board[aRow][aCol].piece;
+    board[aRow][aCol].piece = { color: opColor, size: a.size };
+    const aBlocks = checkWin(opColor) ? 1 : 0;
+    board[aRow][aCol].piece = aBlockBackup;
+
+    const bBlockBackup = board[bRow][bCol].piece;
+    board[bRow][bCol].piece = { color: opColor, size: b.size };
+    const bBlocks = checkWin(opColor) ? 1 : 0;
+    board[bRow][bCol].piece = bBlockBackup;
+
+    if (aBlocks !== bBlocks) return bBlocks - aBlocks;
+
+    // Priority 4: Killer moves (depth-aware heuristic)
+    if (depth && killerMoves && killerMoves[depth]) {
+      let aIsKiller = false, bIsKiller = false;
+      for (const killer of killerMoves[depth]) {
+        if (moveEquals(a, killer)) aIsKiller = true;
+        if (moveEquals(b, killer)) bIsKiller = true;
+      }
+      if (aIsKiller !== bIsKiller) return bIsKiller ? 1 : -1;
+    }
+
+    // Priority 5: Center positions
+    return POSITION_SCORE[bRow][bCol] - POSITION_SCORE[aRow][aCol];
+  });
+}
+
+function minimax(depth, alpha, beta, isMax, board, stock, aiColor, tt, startTime, killerMoves) {
+  const opColor = aiColor === "yellow" ? "red" : "yellow";
+
+  // 0. Check time limit (stop search if exceeded)
+  if (Date.now() - startTime > TIME_LIMIT) {
+    return evalLeaf(board, stock, aiColor);
+  }
+
+  // 1. Check transposition table
+  const hash = zobristHash(board, stock);
+  if (tt[hash] && tt[hash].depth >= depth) {
+    return tt[hash].score;
+  }
+
+  // 2. Terminal check
+  if (checkWin(aiColor)) {
+    return WIN_SCORE + depth; // Prefer faster wins
+  }
+  if (checkWin(opColor)) {
+    return LOSS_SCORE - depth; // Prefer slower losses
+  }
+  const aiMoves = getAllMoves(aiColor);
+  const opMoves = getAllMoves(opColor);
+  if (!aiMoves.length && !opMoves.length) {
+    return DRAW_SCORE;
+  }
+
+  // 3. Depth limit reached
+  if (depth === 0) {
+    const score = evalLeaf(board, stock, aiColor);
+    tt[hash] = { score, depth };
+    return score;
+  }
+
+  // 4. Generate and order moves
+  const moves = isMax ? aiMoves : opMoves;
+  const color = isMax ? aiColor : opColor;
+  const orderedMoves = moveOrder(moves, board, stock, color, depth, killerMoves);
+
+  // 5. Alpha-beta loop
+  let bestScore = isMax ? -Infinity : Infinity;
+  for (const move of orderedMoves) {
+    // Check time limit before exploring move
+    if (Date.now() - startTime > TIME_LIMIT) {
+      tt[hash] = { score: bestScore, depth };
+      return bestScore;
+    }
+
+    const r = move.cell.row, c = move.cell.col;
+    const backup = board[r][c].piece;
+    const backupStock = JSON.parse(JSON.stringify(stock));
+
+    board[r][c].piece = { color, size: move.size };
+    stock[color][move.size]--;
+
+    const score = minimax(depth - 1, alpha, beta, !isMax, board, stock, aiColor, tt, startTime, killerMoves);
+
+    board[r][c].piece = backup;
+    stock[color].small = backupStock[color].small;
+    stock[color].large = backupStock[color].large;
+
+    if (isMax) {
+      bestScore = Math.max(bestScore, score);
+      alpha = Math.max(alpha, bestScore);
+    } else {
+      bestScore = Math.min(bestScore, score);
+      beta = Math.min(beta, bestScore);
+    }
+
+    if (beta <= alpha) {
+      // Store killer move for this depth
+      if (!killerMoves[depth]) killerMoves[depth] = [];
+      killerMoves[depth].unshift(move); // add to front
+      if (killerMoves[depth].length > 2) killerMoves[depth].pop(); // keep only 2
+      break;
+    }
+  }
+
+  // 6. Store in transposition table
+  tt[hash] = { score: bestScore, depth };
+  return bestScore;
+}
+
+function quickMoveScore(move, board, stock, aiColor) {
+  // Fast heuristic score: position value + piece value
+  let score = POSITION_SCORE[move.cell.row][move.cell.col];
+  score += move.size === "large" ? 10 : 3;
+
+  // Check if move creates immediate win
+  const r = move.cell.row, c = move.cell.col;
+  const backup = board[r][c].piece;
+  board[r][c].piece = { color: aiColor, size: move.size };
+  if (checkWin(aiColor)) score += 1000;
+  board[r][c].piece = backup;
+
+  return score;
+}
+
+function iterativeDeepen(board, stock, aiColor, difficulty) {
+  let moves = getAllMoves(aiColor);
+  if (!moves.length) {
+    pcNoMoves();
+    return null;
+  }
+
+  // For DEMON3, pre-sort moves at root for faster pruning
+  if (pcDifficulty === "demon3") {
+    moves = rootMoveOrder(moves, board, stock, aiColor);
+  } else {
+    // DEMON2: Use moveOrder at root with MAX_DEPTH to enable killer moves + threat detection
+    const killerMovesRoot = {}; // Empty at root, will be populated by minimax
+    moves = moveOrder(moves, board, stock, aiColor, MAX_DEPTH, killerMovesRoot);
+  }
+
+  let bestMove = moves[0];
+  let bestScore = -Infinity;
+  const killerMoves = {}; // Track killer moves per depth
+  const tt = {}; // Transposition table for this search
+  const startTime = Date.now();
+
+  for (let depth = 1; depth <= MAX_DEPTH; depth++) {
+    if (Date.now() - startTime > TIME_LIMIT) break;
+
+    let depthBest = null;
+    let depthBestScore = -Infinity;
+
+    for (const move of moves) {
+      const r = move.cell.row, c = move.cell.col;
+      const backup = board[r][c].piece;
+      const backupStock = JSON.parse(JSON.stringify(stock));
+
+      board[r][c].piece = { color: aiColor, size: move.size };
+      stock[aiColor][move.size]--;
+
+      const score = minimax(depth - 1, -Infinity, Infinity, false, board, stock, aiColor, tt, startTime, killerMoves);
+
+      board[r][c].piece = backup;
+      stock[aiColor].small = backupStock[aiColor].small;
+      stock[aiColor].large = backupStock[aiColor].large;
+
+      if (score > depthBestScore) {
+        depthBestScore = score;
+        depthBest = move;
+      }
+    }
+
+    if (depthBestScore > bestScore) {
+      bestScore = depthBestScore;
+      bestMove = depthBest;
+    }
+  }
+
+  return bestMove;
+}
+
+function pcMoveDemon2() {
+  const move = iterativeDeepen(cells, stock, "yellow", "DEMON2");
+  if (move) {
+    doPCMove(move);
+  } else {
+    pcNoMoves();
+  }
+}
+
+function pcMoveDemon3() {
+  const move = iterativeDeepen(cells, stock, "yellow", "DEMON3");
+  if (move) {
+    doPCMove(move);
+  } else {
+    pcNoMoves();
+  }
+}
+
+// ── Init ───────────────────────────────────────────────
+loadTheme();
+loadSound();
+initMusic();
+
+// Auto-play music on first user interaction (browser autoplay policy)
+function playMusicOnFirstInteraction() {
+  bgMusic.play().catch(() => {});
+  document.removeEventListener("click", playMusicOnFirstInteraction);
+  document.removeEventListener("touchstart", playMusicOnFirstInteraction);
+}
+document.addEventListener("click", playMusicOnFirstInteraction);
+document.addEventListener("touchstart", playMusicOnFirstInteraction);
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has("join")) {
+  setTimeout(() => {
+    showP2PMenu();
+    document.getElementById("p2pCreate").style.display = "none";
+    document.getElementById("p2pInput").style.display = "block";
+    document.getElementById("gameCodeInput").value = urlParams.get("join");
+    setTimeout(() => document.querySelector('#p2pInput button').click(), 100);
+  }, 500);
+}
+
+// Load replay from URL hash if present
+loadReplayFromURL();
+</script>
+
+</body>
+</html>
