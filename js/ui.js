@@ -159,6 +159,33 @@ function _spawnConfetti() {
   }
 }
 
+/**
+ * Animate a piece clone flying from srcRect to dstRect (fixed-position).
+ * Calls onComplete when transition ends (or 500ms safety timeout).
+ */
+export function flyPiece(color, size, srcRect, dstRect, onComplete) {
+  const clone = document.createElement('div');
+  clone.className = 'piece';
+  clone.dataset.color = color;
+  clone.dataset.size  = String(size);
+  Object.assign(clone.style, {
+    position:      'fixed',
+    left:          `${srcRect.left}px`,
+    top:           `${srcRect.top}px`,
+    pointerEvents: 'none',
+    zIndex:        '9999',
+    transition:    'left 0.32s ease-in-out, top 0.32s ease-in-out',
+  });
+  document.body.appendChild(clone);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    clone.style.left = `${dstRect.left}px`;
+    clone.style.top  = `${dstRect.top}px`;
+    const done = () => { clone.remove(); onComplete?.(); };
+    clone.addEventListener('transitionend', done, { once: true });
+    setTimeout(done, 500);
+  }));
+}
+
 export function setThinking(panelId, thinking) {
   document.getElementById(panelId)?.classList.toggle('thinking', thinking);
 }

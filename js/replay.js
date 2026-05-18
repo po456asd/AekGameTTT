@@ -74,7 +74,7 @@ export async function copyReplayJSON() {
 
 // ── Replay Viewer ─────────────────────────────────────────────
 import { initGame, applyMove as engineApplyMove } from './engine.js';
-import { renderBoard, renderStock } from './ui.js';
+import { renderBoard, renderStock, flyPiece } from './ui.js';
 
 let _viewerData   = null;
 let _viewerStep   = 0;
@@ -107,6 +107,64 @@ function _applyUpTo(targetStep) {
   _updateViewerHeader();
 }
 
+/**
+ * Advance one step forward with fly animation (used by Next button and Auto play).
+ * Calls onDone() when animation completes (or immediately if no rect captured).
+ */
+function _stepForwardAnimated(onDone) {
+  if (!_viewerData || _viewerStep >= _viewerData.moves.length) { onDone?.(); return; }
+  const move    = _viewerData.moves[_viewerStep];
+  const boardEl = document.getElementById('board-replay');
+
+  // Capture source rect BEFORE applying
+  let srcRect = null;
+  if (move.from.type === 'stock') {
+    const panelId = move.color === 'red' ? 'stock-red-replay' : 'stock-yellow-replay';
+    const sp = document.getElementById(panelId)?.querySelector(`.piece[data-size="${move.from.size}"]`);
+    if (sp) srcRect = sp.getBoundingClientRect();
+  } else {
+    const sp = boardEl?.children[move.from.cell]?.querySelector('.piece');
+    if (sp) srcRect = sp.getBoundingClientRect();
+  }
+
+  const moveObj = { ...move, _searchMode: true };
+  engineApplyMove(moveObj);
+  const wasGobble = moveObj._gobbled != null;
+
+  renderBoard(boardEl, null);
+  renderStock('stock-red-replay', 'stock-yellow-replay', null);
+  _viewerStep++;
+  _updateViewerHeader();
+
+  const cellEl  = boardEl?.children[move.to.cell];
+  const pieceEl = cellEl?.querySelector('.piece');
+
+  if (srcRect && pieceEl) {
+    const dstRect = pieceEl.getBoundingClientRect();
+    pieceEl.style.opacity = '0';
+
+    let gobbledEl = null;
+    if (wasGobble && moveObj._gobbled) {
+      gobbledEl = document.createElement('div');
+      gobbledEl.className = 'piece';
+      gobbledEl.dataset.color = moveObj._gobbled.color;
+      gobbledEl.dataset.size  = String(moveObj._gobbled.size);
+      cellEl.appendChild(gobbledEl);
+    }
+
+    flyPiece(move.color, move.from.size, srcRect, dstRect, () => {
+      gobbledEl?.remove();
+      pieceEl.style.opacity = '';
+      pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
+      pieceEl.addEventListener('animationend', () =>
+        pieceEl.classList.remove('anim-gobble-in', 'anim-place'), { once: true });
+      onDone?.();
+    });
+  } else {
+    onDone?.();
+  }
+}
+
 function _updateViewerHeader() {
   const d = _viewerData;
   const total = d?.moves?.length ?? 0;
@@ -132,7 +190,7 @@ export function initViewerControls() {
   });
   document.getElementById('btn-replay-next')?.addEventListener('click', () => {
     _autoStop();
-    if (_viewerData && _viewerStep < _viewerData.moves.length) _applyUpTo(_viewerStep + 1);
+    _stepForwardAnimated();
   });
   document.getElementById('btn-replay-end')?.addEventListener('click', () => {
     _autoStop(); if (_viewerData) _applyUpTo(_viewerData.moves.length);
@@ -144,7 +202,7 @@ export function initViewerControls() {
     const delay = Math.round(800 / speed);
     _autoInterval = setInterval(() => {
       if (!_viewerData || _viewerStep >= _viewerData.moves.length) { _autoStop(); return; }
-      _applyUpTo(_viewerStep + 1);
+      _stepForwardAnimated();
     }, delay);
   });
 

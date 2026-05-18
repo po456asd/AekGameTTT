@@ -5,7 +5,7 @@ import {
 import { findBestMove, initTT, getTTBuffer } from './ai.js';
 import {
   renderBoard, renderStock, clearHighlights, highlightValidCells,
-  flashInvalid, updateTurnIndicator, showWinAnimation, setThinking
+  flashInvalid, updateTurnIndicator, showWinAnimation, setThinking, flyPiece
 } from './ui.js';
 import { isOnlineAvailable } from './network.js';
 import { startRecording, finalizeReplay, saveReplayJSON, copyReplayJSON, recordMove, loadReplayViewer, initViewerControls, getReplayData } from './replay.js';
@@ -407,35 +407,6 @@ function endGame(winner) {
 
 // ── AI ───────────────────────────────────────────────────────
 
-/**
- * Animate a piece clone flying from `srcRect` to `dstRect` on screen.
- * Clone inherits piece CSS (color/size) via data attributes.
- * Calls `onComplete` when the CSS transition ends (or after 500ms safety).
- */
-function _flyClone(color, size, srcRect, dstRect, onComplete) {
-  const clone = document.createElement('div');
-  clone.className = 'piece';
-  clone.dataset.color = color;
-  clone.dataset.size  = size;
-  Object.assign(clone.style, {
-    position:      'fixed',
-    left:          `${srcRect.left}px`,
-    top:           `${srcRect.top}px`,
-    pointerEvents: 'none',
-    zIndex:        '9999',
-    transition:    'left 0.32s ease-in-out, top 0.32s ease-in-out',
-  });
-  document.body.appendChild(clone);
-  // Double rAF ensures transition fires (not collapsed into initial paint)
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    clone.style.left = `${dstRect.left}px`;
-    clone.style.top  = `${dstRect.top}px`;
-    const done = () => { clone.remove(); onComplete?.(); };
-    clone.addEventListener('transitionend', done, { once: true });
-    setTimeout(done, 500); // safety cleanup if transitionend never fires
-  }));
-}
-
 function _applyAIMove(move) {
   if (!move || state.gameOver) return;
   setThinking(ctx.aiColor === 'red' ? 'stock-red' : 'stock-yellow', false);
@@ -477,11 +448,22 @@ function _applyAIMove(move) {
   const wasGobble = matched._gobbled != null;
 
   if (pieceSrcRect && _pieceEl) {
-    // Fly clone from source (stock or board) → destination cell
     const dstRect = _pieceEl.getBoundingClientRect();
     _pieceEl.style.opacity = '0';
+
+    // Keep gobbled piece visible during flight so it doesn't vanish instantly
+    let _gobbledEl = null;
+    if (wasGobble && matched._gobbled) {
+      _gobbledEl = document.createElement('div');
+      _gobbledEl.className = 'piece';
+      _gobbledEl.dataset.color = matched._gobbled.color;
+      _gobbledEl.dataset.size  = String(matched._gobbled.size);
+      _cellEl.appendChild(_gobbledEl);
+    }
+
     renderStock('stock-red', 'stock-yellow', handleStockClick, handleStockPieceDragStart);
-    _flyClone(ctx.aiColor, matched.from.size, pieceSrcRect, dstRect, () => {
+    flyPiece(ctx.aiColor, matched.from.size, pieceSrcRect, dstRect, () => {
+      _gobbledEl?.remove();
       _pieceEl.style.opacity = '';
       _pieceEl.classList.add(wasGobble ? 'anim-gobble-in' : 'anim-place');
       _pieceEl.addEventListener('animationend', () =>

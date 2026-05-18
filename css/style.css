@@ -40,7 +40,7 @@ body {
 
 /* ── Game Screen ── */
 #screen-game { padding: 1rem; gap: 1rem; }
-#game-wrapper { display: flex; align-items: flex-start; gap: clamp(0.5rem, 2vw, 2rem); }
+#game-wrapper, #game-wrapper-replay { display: flex; align-items: flex-start; gap: clamp(0.5rem, 2vw, 2rem); }
 #turn-indicator {
   font-size: 1rem; font-weight: 600; letter-spacing: 2px;
   text-transform: uppercase; padding: 0.4rem 1rem;
