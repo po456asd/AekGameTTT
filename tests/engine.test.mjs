@@ -153,28 +153,18 @@ initGame();
   assert.equal(moves.filter(m => m.from.type === 'board').length, 0, 'no board moves at start');
 }
 
-// Stock gobble NOT allowed without opponent threat
+// Stock gobble always allowed when piece is larger (standard rule)
 initGame();
 {
   state.board[5] = [{ color: 'yellow', size: 0 }];
   updateSurfaceCell(5);
-  state.stock.yellow[0] = 2;
   const moves = getValidMoves('red');
+  // red size 1/2/3 from stock should all be able to gobble yellow size 0 at cell 5
   const gobbles = moves.filter(m => m.from.type === 'stock' && m.to.cell === 5);
-  assert.equal(gobbles.length, 0, 'no stock gobble without opponent threat');
-}
-
-// Stock gobble ALLOWED when opponent has 3-in-a-row threat
-initGame();
-{
-  state.board[0] = [{ color: 'yellow', size: 1 }];
-  state.board[1] = [{ color: 'yellow', size: 1 }];
-  state.board[2] = [{ color: 'yellow', size: 1 }];
-  [0,1,2].forEach(c => updateSurfaceCell(c));
-  state.stock.yellow[1] = 0;
-  const moves = getValidMoves('red');
-  const gobbles = moves.filter(m => m.from.type === 'stock' && [0,1,2].includes(m.to.cell));
-  assert.ok(gobbles.length > 0, 'stock gobble allowed when opponent has 3-in-a-row');
+  assert.ok(gobbles.length > 0, 'stock gobble always allowed when piece is larger');
+  // red size 0 from stock cannot gobble yellow size 0 (not larger)
+  const sameSize = gobbles.filter(m => m.from.size === 0);
+  assert.equal(sameSize.length, 0, 'stock cannot gobble same-size piece');
 }
 
 // Board moves: red large on cell 0 can move to 15 empty cells

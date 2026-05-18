@@ -116,19 +116,12 @@ export function checkThreats(color, count) {
  */
 export function getValidMoves(color) {
   const moves = [];
-  const oppColor    = color === 'red' ? 'yellow' : 'red';
-  const oppHasThreat = checkThreats(oppColor, 3);
 
   // ── Stock moves ──────────────────────────────────────────────
   for (let size = 0; size <= 3; size++) {
     if (state.stock[color][size] <= 0) continue;
     for (let cell = 0; cell < 16; cell++) {
-      const stack = state.board[cell];
-      if (stack.length === 0) {
-        // Empty cell: always allowed from stock
-        moves.push({ from: { type: 'stock', cell: null, size }, to: { cell }, color, timestamp: 0 });
-      } else if (canPlace(size, cell, color) && oppHasThreat) {
-        // Gobble from stock: only when opponent has active 3-in-a-row
+      if (canPlace(size, cell, color)) {
         moves.push({ from: { type: 'stock', cell: null, size }, to: { cell }, color, timestamp: 0 });
       }
     }
