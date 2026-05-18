@@ -3,7 +3,7 @@
 
 body {
   margin: 0; min-height: 100vh;
-  background: #1a1a2e; color: #eee;
+  background: #1e1e1e; color: #eee;
   font-family: 'Segoe UI', system-ui, sans-serif;
   display: flex; align-items: center; justify-content: center;
 }
@@ -55,34 +55,30 @@ body {
 
 /* ── Board ── */
 #board, #board-replay {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-  padding: 12px; background: #0f1923; border-radius: 12px;
-  box-shadow: inset 0 2px 12px rgba(0,0,0,0.6);
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+  padding: 2px; background: #2a2a2a; border-radius: 8px;
+  box-shadow: none;
   width:  clamp(240px, 55vw, 480px);
   height: clamp(240px, 55vw, 480px);
 }
 .cell {
-  position: relative; background: #16202b; border-radius: 8px;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+  position: relative; background: #363636; border-radius: 4px;
+  box-shadow: none;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: box-shadow 0.15s; aspect-ratio: 1;
 }
-.cell:hover { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 0 2px #888; }
-.cell.valid-target { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 0 3px #4caf50; }
-.cell.drag-over {
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 0 3px #2196f3;
-}
+.cell:hover { box-shadow: inset 0 0 0 2px #555; }
+.cell.valid-target { box-shadow: inset 0 0 0 2px #4caf50; }
+.cell.drag-over    { box-shadow: inset 0 0 0 2px #2196f3; }
 .cell.invalid-flash { animation: invalidFlash 0.3s; }
-@keyframes invalidFlash { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 3px #e53935;} }
-.cell[data-depth="2"] { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 2px 2px 0 #333; }
-.cell[data-depth="3"] { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 3px 3px 0 #333, 5px 5px 0 #222; }
-.cell[data-depth="4"] { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 3px 3px 0 #333, 6px 6px 0 #222, 9px 9px 0 #111; }
+@keyframes invalidFlash { 0%,100%{box-shadow:none} 50%{box-shadow:inset 0 0 0 2px #e53935;} }
 
 /* ── Pieces ── */
 .piece {
-  position: absolute; border-radius: 50%;
+  position: absolute; border-radius: 22%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: transform 0.15s; user-select: none;
+  border: 2px solid #222;
 }
 .piece:hover { transform: scale(1.08); }
 .piece[data-color="red"]:hover    { box-shadow: 0 0 0 2px rgba(231,76,60,0.6); }
@@ -90,10 +86,10 @@ body {
 .piece.selected { outline: none; }
 .piece[data-color="red"].selected    { box-shadow: 0 0 0 3px #fff, 0 0 14px rgba(231,76,60,0.9) !important; }
 .piece[data-color="yellow"].selected { box-shadow: 0 0 0 3px #fff, 0 0 14px rgba(241,196,15,0.9) !important; }
-.piece[data-size="0"] { width: 32px; height: 32px; }
-.piece[data-size="1"] { width: 48px; height: 48px; }
-.piece[data-size="2"] { width: 64px; height: 64px; }
-.piece[data-size="3"] { width: 80px; height: 80px; }
+.piece[data-size="0"] { width: 20px; height: 20px; }
+.piece[data-size="1"] { width: 38px; height: 38px; }
+.piece[data-size="2"] { width: 58px; height: 58px; }
+.piece[data-size="3"] { width: 82px; height: 82px; }
 
 /* Red: flat solid + red glow */
 .piece[data-color="red"] { background: #e74c3c; }
@@ -130,9 +126,11 @@ body {
 /* ── Stock Panels ── */
 .stock-panel {
   display: flex; flex-direction: column; gap: 0.5rem; align-items: center;
-  padding: 0.75rem; background: #0f1923; border-radius: 12px;
+  padding: 0.75rem; background: #2a2a2a; border-radius: 12px;
   min-width: clamp(60px, 10vw, 100px);
 }
+#stock-red,        #stock-red-replay        { background: rgba(231, 76, 60, 0.18); border: 1px solid rgba(231,76,60,0.35); border-radius: 12px; }
+#stock-yellow,     #stock-yellow-replay     { background: rgba(241,196, 15, 0.18); border: 1px solid rgba(241,196,15,0.35); border-radius: 12px; }
 .stock-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #aaa; }
 
 /* Stock pieces rendered individually — override position:absolute from .piece */
@@ -141,6 +139,8 @@ body {
   display: block !important;
   cursor: grab;
   flex-shrink: 0;
+  width: 68px !important;
+  height: 68px !important;
 }
 .stock-panel .piece:active { cursor: grabbing; }
 .stock-panel .piece.depleted {
@@ -154,12 +154,15 @@ body {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  gap: 1px;
+  font-size: 0.6rem;
   font-weight: 900;
-  color: rgba(255,255,255,0.9);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  line-height: 1.2;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
   pointer-events: none;
   user-select: none;
 }
@@ -208,11 +211,12 @@ body {
     width: min(90vw, 480px); justify-content: space-around;
   }
   /* Scale pieces to fit cells (cell ≈ 90vw/4 on mobile) */
-  .piece[data-size="0"] { width: clamp(18px, calc(90vw / 18), 32px); height: clamp(18px, calc(90vw / 18), 32px); }
-  .piece[data-size="1"] { width: clamp(26px, calc(90vw / 12), 48px); height: clamp(26px, calc(90vw / 12), 48px); }
-  .piece[data-size="2"] { width: clamp(34px, calc(90vw /  8), 64px); height: clamp(34px, calc(90vw /  8), 64px); }
-  .piece[data-size="3"] { width: clamp(42px, calc(90vw /  6), 80px); height: clamp(42px, calc(90vw /  6), 80px); }
-  .stock-count-badge { font-size: 0.55rem; }
+  .piece[data-size="0"] { width: clamp(12px, calc(90vw / 25),   20px); height: clamp(12px, calc(90vw / 25),   20px); }
+  .piece[data-size="1"] { width: clamp(22px, calc(90vw / 14),   38px); height: clamp(22px, calc(90vw / 14),   38px); }
+  .piece[data-size="2"] { width: clamp(34px, calc(90vw /  9),   58px); height: clamp(34px, calc(90vw /  9),   58px); }
+  .piece[data-size="3"] { width: clamp(46px, calc(90vw /  6.5), 82px); height: clamp(46px, calc(90vw /  6.5), 82px); }
+  .stock-panel .piece   { width: clamp(52px, calc(90vw / 6), 68px) !important; height: clamp(52px, calc(90vw / 6), 68px) !important; }
+  .stock-count-badge { font-size: 0.5rem; }
   /* Red (human) at bottom on mobile for ergonomics */
   #stock-yellow        { order: 1; }
   #stock-yellow-replay { order: 1; }

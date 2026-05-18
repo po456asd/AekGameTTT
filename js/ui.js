@@ -1,6 +1,8 @@
 // js/ui.js
 import { state } from './engine.js';
 
+const SIZE_NAMES = ['Tiny', 'Small', 'Medium', 'Large'];
+
 // ── Board ─────────────────────────────────────────────────────
 
 /**
@@ -68,10 +70,15 @@ function _renderStockPanel(panelId, color, onStockClick, onDragStart) {
     );
     piece.dataset.fromType = 'stock';
 
-    // Count badge inside the piece
+    // Count badge inside the piece — two-line "Large x 3"
     const badge = document.createElement('span');
     badge.className = 'stock-count-badge';
-    badge.textContent = count;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = SIZE_NAMES[size];
+    const countSpan = document.createElement('span');
+    countSpan.textContent = `x ${count}`;
+    badge.appendChild(nameSpan);
+    badge.appendChild(countSpan);
     piece.appendChild(badge);
 
     if (depleted) {
