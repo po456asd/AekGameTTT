@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gobblet</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- Enables SharedArrayBuffer on GitHub Pages (COOP/COEP via Service Worker).
-       Silently no-ops on file:// or browsers without SW support. -->
-  <script src="coi-serviceworker.js"></script>
+  <!-- coi-serviceworker.js is available but NOT auto-loaded.
+       Enable it only if you need SharedArrayBuffer (AI worker SMP).
+       It reloads the page once on first visit to inject COOP/COEP headers. -->
+
 </head>
 <body>
 
