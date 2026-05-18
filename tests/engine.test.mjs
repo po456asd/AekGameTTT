@@ -56,10 +56,11 @@ assert.equal(popcount16(0x1FFFFn), 16, 'bits above 15 are truncated');
 initGame();
 assert.equal(canPlace(0, 5, 'red'), true, 'empty cell: tiny can place');
 
-// canPlace: cannot gobble own piece
+// canPlace: larger piece CAN cover own smaller piece (standard Gobblet rule)
 initGame();
 state.board[5] = [{ color: 'red', size: 0 }];
-assert.equal(canPlace(1, 5, 'red'), false, 'cannot gobble own piece');
+assert.equal(canPlace(1, 5, 'red'), true,  'larger can cover own smaller piece');
+assert.equal(canPlace(0, 5, 'red'), false, 'cannot cover own equal-size piece');
 
 // canPlace: larger gobbles smaller opponent
 initGame();

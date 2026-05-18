@@ -59,13 +59,12 @@ export function popcount16(n) {
 
 /**
  * Can a piece of `fromSize` (0-3) be placed on `cell` by `currentColor`?
- * True if: cell is empty, OR fromSize > top.size AND top.color !== currentColor.
+ * True if: cell is empty, OR fromSize > top.size (either color).
  */
 export function canPlace(fromSize, cell, currentColor) {
   const stack = state.board[cell];
   if (stack.length === 0) return true;
   const top = stack[stack.length - 1];
-  if (top.color === currentColor) return false;
   return fromSize > top.size;
 }
 
